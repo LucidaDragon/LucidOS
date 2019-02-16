@@ -27,6 +27,7 @@ typedef struct {
 
 
 
+
  //Clears the screen and returns the caret to the top left corner.
 void ClearScreen(EFI_SYSTEM_TABLE *table) {
 	table->ConOut->ClearScreen(table->ConOut);
