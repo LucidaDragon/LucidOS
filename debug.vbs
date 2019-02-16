@@ -7,7 +7,7 @@
 ' Note: You may get a prompt from the firewall when trying to download the BIOS file
 
 ' Modify these variables as needed
-QEMU_PATH  = "C:\Program Files\qemu\"
+QEMU_PATH  = "..\QEMU\"
 ' You can add something like "-S -gdb tcp:127.0.0.1:1234" if you plan to use gdb to debug
 QEMU_OPTS  = "-net none -monitor none -parallel none"
 ' Set to True if you need to download a file that might be cached locally
