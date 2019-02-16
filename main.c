@@ -24,23 +24,23 @@ typedef struct {
 
 
  //Clears the screen and returns the caret to the top left corner.
-void ClearScreen(EFI_SYSTEM_TABLE *table) {
-	table->ConOut->ClearScreen(table->ConOut);
+void ClearScreen(ENVIRONMENT *e) {
+	e->Table->ConOut->ClearScreen(e->Table->ConOut);
 }
 
 //Waits for any key to be pressed.
-void WaitForKey(EFI_SYSTEM_TABLE *table) {
+void WaitForKey(ENVIRONMENT *e) {
 	UINTN event;
-	table->ConIn->Reset(table->ConIn, FALSE);
-	table->BootServices->WaitForEvent(1, &table->ConIn->WaitForKey, &event);
+	e->Table->ConIn->Reset(e->Table->ConIn, FALSE);
+	e->Table->BootServices->WaitForEvent(1, &e->Table->ConIn->WaitForKey, &event);
 }
 
 //Prints the current system time.
-void PrintTime(EFI_SYSTEM_TABLE *table, BOOLEAN newLine) {
+void PrintTime(ENVIRONMENT *e, BOOLEAN newLine) {
 	EFI_TIME time;
 	EFI_TIME_CAPABILITIES caps;
 	CHAR16 buf;
-	table->RuntimeServices->GetTime(&time, &caps);
+	e->Table->RuntimeServices->GetTime(&time, &caps);
 	TimeToString(&buf, &time);
 	Print(&buf);
 
@@ -51,16 +51,16 @@ void PrintTime(EFI_SYSTEM_TABLE *table, BOOLEAN newLine) {
 }
 
 //Read a line of text from the user.
-void ReadLine(EFI_SYSTEM_TABLE *table, CHAR16 *buffer) {
+void ReadLine(ENVIRONMENT *e, CHAR16 *buffer) {
 	UINTN event;
 	BOOLEAN exit = FALSE;
 	EFI_INPUT_KEY last;
 
-	table->ConIn->Reset(table->ConIn, FALSE);
+	e->Table->ConIn->Reset(e->Table->ConIn, FALSE);
 	while (exit == FALSE)
 	{
-		table->BootServices->WaitForEvent(1, &table->ConIn->WaitForKey, &event);
-		table->ConIn->ReadKeyStroke(table->ConIn, &last);
+		e->Table->BootServices->WaitForEvent(1, &e->Table->ConIn->WaitForKey, &event);
+		e->Table->ConIn->ReadKeyStroke(e->Table->ConIn, &last);
 		Print(&last.UnicodeChar);
 		if (last.UnicodeChar == L'\n') {
 			exit = TRUE;
@@ -72,19 +72,63 @@ void ReadLine(EFI_SYSTEM_TABLE *table, CHAR16 *buffer) {
 }
 
 //Sets the cursor position.
-void SetPos(EFI_SYSTEM_TABLE *table, UINTN x, UINTN y) {
-	table->ConOut->SetCursorPosition(table->ConOut, x, y);
+void SetPos(ENVIRONMENT *e, UINTN x, UINTN y) {
+	e->Table->ConOut->SetCursorPosition(e->Table->ConOut, x, y);
 }
 
 //Sets the screen color to print in.
-void SetColor(EFI_SYSTEM_TABLE *table, UINT8 forecolor, UINT8 backcolor) {
-	table->ConOut->SetAttribute(table->ConOut, EFI_TEXT_ATTR(forecolor, backcolor));
+void SetColor(ENVIRONMENT *e, UINT8 forecolor, UINT8 backcolor) {
+	e->Table->ConOut->SetAttribute(e->Table->ConOut, EFI_TEXT_ATTR(forecolor, backcolor));
 }
 
 //Prints a full block character in the specified color.
-void PrintColor(EFI_SYSTEM_TABLE *table, UINT8 color) {
-	SetColor(table, color, EFI_BLACK);
+void PrintColor(ENVIRONMENT *e, UINT8 color) {
+	SetColor(e, color, EFI_BLACK);
 	Print(L"█");
+}
+
+//Draw a horizontal bar that fills the screen.
+void DrawBar(ENVIRONMENT *e, UINT8 color) {
+	for (UINTN i = 0; i < e->Screen.Size.Width; i++) PrintColor(e, color);
+}
+
+//Enters a new OS environment space.
+void Environment(ENVIRONMENT *e) {
+	ClearScreen(e);
+
+	DrawBar(e, EFI_RED);
+	DrawBar(e, EFI_YELLOW);
+	DrawBar(e, EFI_GREEN);
+	DrawBar(e, EFI_BLUE);
+	DrawBar(e, EFI_MAGENTA);
+	Print(L"\n");
+	SetColor(e, EFI_WHITE, EFI_BLACK);
+
+	PrintTime(e, TRUE);
+
+	PrintColor(e, EFI_RED);
+	PrintColor(e, EFI_YELLOW);
+	PrintColor(e, EFI_GREEN);
+	PrintColor(e, EFI_BLUE);
+	PrintColor(e, EFI_MAGENTA);
+	Print(L"\n\n");
+	for (UINT8 b = 0; b < 16; b++) {
+		for (UINT8 f = 0; f < 16; f++) {
+			SetColor(e, f, b);
+			Print(L"A");
+		}
+		Print(L"\n");
+	}
+	Print(L"\n\n");
+	SetColor(e, EFI_WHITE, EFI_BLACK);
+	CHAR16 *buffer = L"Test";
+	ReadLine(e, buffer);
+
+	Print(L"%NPress any key to continue...");
+	WaitForKey(e);
+
+	Print(L"\n%EPress any key to exit.%N\n");
+	WaitForKey(e);
 }
 
 //Configures the display to it's largest supported text mode size and returns the screen definition.
@@ -109,50 +153,6 @@ SCREEN ConfigureDisplay(EFI_SYSTEM_TABLE *table) {
 	scr.Size = s;
 	scr.Mode = highestMode;
 	return scr;
-}
-
-//Draw a horizontal bar that fills the screen.
-void DrawBar(ENVIRONMENT *e, UINT8 color) {
-	for (UINTN i = 0; i < e->Screen.Size.Width; i++) PrintColor(e->Table, color);
-}
-
-//Enters a new OS environment space.
-void Environment(ENVIRONMENT *e) {
-	ClearScreen(e->Table);
-
-	DrawBar(e, EFI_RED);
-	DrawBar(e, EFI_YELLOW);
-	DrawBar(e, EFI_GREEN);
-	DrawBar(e, EFI_BLUE);
-	DrawBar(e, EFI_MAGENTA);
-	Print(L"\n");
-	SetColor(e->Table, EFI_WHITE, EFI_BLACK);
-
-	PrintTime(e->Table, TRUE);
-
-	PrintColor(e->Table, EFI_RED);
-	PrintColor(e->Table, EFI_YELLOW);
-	PrintColor(e->Table, EFI_GREEN);
-	PrintColor(e->Table, EFI_BLUE);
-	PrintColor(e->Table, EFI_MAGENTA);
-	Print(L"\n\n");
-	for (UINT8 b = 0; b < 16; b++) {
-		for (UINT8 f = 0; f < 16; f++) {
-			SetColor(e->Table, f, b);
-			Print(L"A");
-		}
-		Print(L"\n");
-	}
-	Print(L"\n\n");
-	SetColor(e->Table, EFI_WHITE, EFI_BLACK);
-	CHAR16 *buffer = L"Test";
-	ReadLine(e->Table, buffer);
-
-	Print(L"%NPress any key to continue...");
-	WaitForKey(e->Table);
-
-	Print(L"\n%EPress any key to exit.%N\n");
-	WaitForKey(e->Table);
 }
 
 //Initialize the environment using the system table and image handle.
