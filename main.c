@@ -20,6 +20,13 @@ typedef struct {
 	SCREEN Screen;
 } ENVIRONMENT;
 
+//Object that has a x position, y position, width, and height.
+typedef struct {
+	UINTN X;
+	UINTN Y;
+	UINTN Width;
+	UINTN Height;
+} RECT;
 
 
 
@@ -92,11 +99,46 @@ void DrawBar(ENVIRONMENT *e, UINT8 color) {
 	for (UINTN i = 0; i < e->Screen.Size.Width; i++) PrintColor(e, color);
 }
 
+//Fills the screen with a color.
+void Clear(ENVIRONMENT *e, UINT8 color) {
+	SetPos(e, 0, 0);
+	for (UINTN i = 0; i < e->Screen.Size.Height; i++) {
+		DrawBar(e, color);
+	}
+	SetPos(e, 0, 0);
+}
+
+//Fills a rectangle with the specified color.
+void FillRect(ENVIRONMENT *e, RECT *r, UINT8 color) {
+	for (UINTN y = 0; y < r->Height; y++) {
+		for (UINTN x = 0; x < r->Width; x++) {
+			SetPos(e, x + r->X, y + r->Y);
+			PrintColor(e, color);
+		}
+	}
+}
+
+//Draws a rectangle with the specified color.
+void DrawRect(ENVIRONMENT *e, RECT *r, UINT8 color) {
+	for (UINTN i = 0; i < r->Width; i++) {
+		SetPos(e, i + r->X, r->Y);
+		PrintColor(e, color);
+		SetPos(e, i + r->X, r->Y + r->Height);
+		PrintColor(e, color);
+	}
+	for (UINTN i = 0; i < r->Height; i++) {
+		SetPos(e, r->X, i + r->Y);
+		PrintColor(e, color);
+		SetPos(e, r->X + r->Width, i + r->Y);
+		PrintColor(e, color);
+	}
+}
+
 //Enters a new OS environment space.
 void Environment(ENVIRONMENT *e) {
 	ClearScreen(e);
 
-	DrawBar(e, EFI_RED);
+	/*DrawBar(e, EFI_RED);
 	DrawBar(e, EFI_YELLOW);
 	DrawBar(e, EFI_GREEN);
 	DrawBar(e, EFI_BLUE);
@@ -121,13 +163,17 @@ void Environment(ENVIRONMENT *e) {
 	}
 	Print(L"\n\n");
 	SetColor(e, EFI_WHITE, EFI_BLACK);
-	CHAR16 *buffer = L"Test";
-	ReadLine(e, buffer);
 
 	Print(L"%NPress any key to continue...");
-	WaitForKey(e);
+	WaitForKey(e);*/
 
-	Print(L"\n%EPress any key to exit.%N\n");
+	Clear(e, EFI_WHITE);
+	RECT r; r.X = 3; r.Y = 3; r.Width = 10; r.Height = 5;
+	FillRect(e, &r, EFI_RED);
+	DrawRect(e, &r, EFI_BLUE);
+	SetColor(e, EFI_BLACK, EFI_WHITE);
+
+	Print(L"\n\nPress any key to exit.\n");
 	WaitForKey(e);
 }
 
