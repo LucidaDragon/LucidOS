@@ -1,5 +1,16 @@
-﻿#include <efi.h>
+﻿//
+// EFI Library Includes
+//
+#include <efi.h>
 #include <efilib.h>
+
+
+
+
+
+//
+// LucidOS Standard Structures
+//
 
 //Object that has a width and height.
 typedef struct {
@@ -30,7 +41,104 @@ typedef struct {
 
 
 
- //Clears the screen and returns the caret to the top left corner.
+
+
+//
+// Library Ports for EFI.
+//
+
+//MATH: Returns the smaller of two values.
+UINTN min(UINTN a, UINTN b) {
+	if (a < b) { return a; } else { return b; }
+}
+
+//MATH: Returns the larger of two values.
+UINTN max(UINTN a, UINTN b) {
+	if (a > b) { return a; } else { return b; }
+}
+
+//STDLIB Ext: Convert a memory pointer excluding size to a memory pointer including size.
+void *msizei(void *ptr) {
+	UINTN *h = ptr;
+	return &h[-1];
+}
+
+//STDLIB Ext: Convert a memory pointer including size to a memory pointer excluding size.
+void *msizee(void *ptr) {
+	UINTN *h = ptr;
+	return &h[1];
+}
+
+//STDLIB: Allocates the requested memory and returns a pointer to it.
+void *malloc(UINTN poolSize) {
+	EFI_STATUS status;
+	void *handle;
+	status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, poolSize + sizeof(UINTN), &handle);
+	if (status == EFI_OUT_OF_RESOURCES) {
+		return NULL;
+	}
+	else if (status == EFI_INVALID_PARAMETER) {
+		return NULL;
+	}
+	else {
+		UINTN *h = handle;
+		h = poolSize;
+		return &h[1];
+	}
+}
+
+//STDLIB: Allocates the requested memory and returns a pointer to it.
+void *calloc(UINTN num, UINTN size) {
+	void *handle = NULL;
+	UINTN numSize = num * size;
+	if (numSize != 0) {
+		handle = malloc(numSize);
+		if (handle != NULL) {
+			(VOID)ZeroMem(handle, numSize);
+		}
+	}
+	return handle;
+}
+
+//STDLIB: Deallocates the memory previously allocated by a call to malloc or realloc.
+void free(void *ptr) {
+	uefi_call_wrapper(BS->FreePool, 1, (UINTN*)msizei(ptr));
+}
+
+//STDLIB Ext: Gets the size of memory at a pointer.
+UINTN msize(void *ptr) {
+	return ((UINTN*)ptr)[-1];
+}
+
+//STDLIB Ext: Gets the number of elements at a pointer.
+UINTN csize(void *ptr, UINTN size) {
+	return msize(ptr) / size;
+}
+
+//STRING: Copies bytes from source pointer to destination pointer.
+void memcpy(void *dest, const void *source, UINTN count) {
+	uefi_call_wrapper(BS->CopyMem, 3, dest, source, count);
+}
+
+//STDLIB: Reallocates the requested memory and returns a pointer to it. The old pointer is invalidated.
+void *realloc(void *ptr, size_t newSize) {
+	void *dest = malloc(newSize);
+	memcpy(dest, ptr, min(msize(ptr), newSize));
+	free(ptr);
+	UINTN *h = dest;
+	h = newSize;
+	return &h[1];
+}
+
+
+
+
+
+//
+// LucidOS Standard Functions
+//
+
+//Clears the screen and returns the caret to the top left corner.
 void ClearScreen(ENVIRONMENT *e) {
 	e->Table->ConOut->ClearScreen(e->Table->ConOut);
 }
@@ -167,11 +275,11 @@ void Environment(ENVIRONMENT *e) {
 	Print(L"%NPress any key to continue...");
 	WaitForKey(e);*/
 
-	Clear(e, EFI_WHITE);
+	/*Clear(e, EFI_WHITE);
 	RECT r; r.X = 3; r.Y = 3; r.Width = 10; r.Height = 5;
 	FillRect(e, &r, EFI_RED);
 	DrawRect(e, &r, EFI_BLUE);
-	SetColor(e, EFI_BLACK, EFI_WHITE);
+	SetColor(e, EFI_BLACK, EFI_WHITE);*/
 
 	Print(L"\n\nPress any key to exit.\n");
 	WaitForKey(e);
