@@ -1,9 +1,4 @@
-﻿/*
- * UEFI:SIMPLE - UEFI development made easy
- * Copyright © 2014-2018 Pete Batard <pete@akeo.ie> - Public Domain
- * See COPYING for the full licensing terms.
- */
-#include <efi.h>
+﻿#include <efi.h>
 #include <efilib.h>
 
 //Object that has a width and height.
