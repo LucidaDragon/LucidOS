@@ -52,6 +52,12 @@ typedef struct {
 	UINTN Size;
 } MEMBLOCK;
 
+//Object that represents a stack.
+typedef struct {
+	UINTN Value;
+	void *Next;
+} STACKNODE;
+
 
 
 
@@ -162,6 +168,48 @@ void PrintTime(ENVIRONMENT *e, BOOLEAN newLine) {
 //Sets the cursor position.
 void SetPos(ENVIRONMENT *e, UINTN x, UINTN y) {
 	e->Table->ConOut->SetCursorPosition(e->Table->ConOut, x, y);
+}
+
+//
+// #Stack Functions#
+//
+
+//Create a stack node.
+STACKNODE *CreateStack(UINTN value) {
+	STACKNODE *s = malloc(sizeof(STACKNODE)).Start;
+	s->Value = value;
+	s->Next = NULL;
+	return s;
+}
+
+//Checks to see if a stack is empty.
+UINTN StackIsEmpty(STACKNODE *root) {
+	return !root;
+}
+
+//Pushes to a stack.
+void StackPush(STACKNODE **root, UINTN value) {
+	STACKNODE *s = CreateStack(value);
+	s->Next = *root;
+	*root = s;
+}
+
+//Pops from a stack.
+UINTN StackPop(STACKNODE **root) {
+	if (StackIsEmpty(*root)) return 0;
+	STACKNODE *temp = *root;
+	*root = (*root)->Next;
+	UINTN popped = temp->Value;
+	MEMBLOCK m;
+	m.Start = temp;
+	free(&m);
+	return popped;
+}
+
+//Peeks at a stack.
+UINTN StackPeek(STACKNODE *root) {
+	if (StackIsEmpty(root)) return 0;
+	return root->Value;
 }
 
 //
