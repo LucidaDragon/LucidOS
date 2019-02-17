@@ -122,7 +122,7 @@ void memcpy(void *dest, const void *source, UINTN count) {
 }
 
 //STDLIB: Reallocates the requested memory and returns a pointer to it. The old pointer is invalidated.
-void *realloc(void *ptr, size_t newSize) {
+void *realloc(void *ptr, UINTN newSize) {
 	void *dest = malloc(newSize);
 	memcpy(dest, ptr, min(msize(ptr), newSize));
 	free(ptr);
@@ -137,6 +137,10 @@ void *realloc(void *ptr, size_t newSize) {
 
 //
 // LucidOS Standard Functions
+//
+
+//
+// #Basic IO Functions#
 //
 
 //Clears the screen and returns the caret to the top left corner.
@@ -192,6 +196,10 @@ void SetPos(ENVIRONMENT *e, UINTN x, UINTN y) {
 	e->Table->ConOut->SetCursorPosition(e->Table->ConOut, x, y);
 }
 
+//
+// #Graphics Functions#
+//
+
 //Sets the screen color to print in.
 void SetColor(ENVIRONMENT *e, UINT8 forecolor, UINT8 backcolor) {
 	e->Table->ConOut->SetAttribute(e->Table->ConOut, EFI_TEXT_ATTR(forecolor, backcolor));
@@ -243,6 +251,10 @@ void DrawRect(ENVIRONMENT *e, RECT *r, UINT8 color) {
 	}
 }
 
+//
+// #Environment Runtime Functions#
+//
+
 //Enters a new OS environment space.
 void Environment(ENVIRONMENT *e) {
 	ClearScreen(e);
@@ -286,6 +298,10 @@ void Environment(ENVIRONMENT *e) {
 	WaitForKey(e);
 }
 
+//
+// #Environment Initialization Functions#
+//
+
 //Configures the display to it's largest supported text mode size and returns the screen definition.
 SCREEN ConfigureDisplay(EFI_SYSTEM_TABLE *table) {
 	UINTN actualW = 0;
@@ -321,6 +337,10 @@ void InitEnvironment(EFI_HANDLE *image, EFI_SYSTEM_TABLE *table) {
 
 	Environment(&e);
 }
+
+//
+// #EFI Initialization Functions#
+//
 
 // Application entrypoint (must be set to 'efi_main' for gnu-efi crt0 compatibility)
 EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
