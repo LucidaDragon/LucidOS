@@ -46,6 +46,12 @@ typedef struct {
 	UINTN Height;
 } RECT;
 
+//Object that represents a block of memory.
+typedef struct {
+	void *Start;
+	UINTN Size;
+} MEMBLOCK;
+
 
 
 
@@ -62,6 +68,27 @@ UINTN min(UINTN a, UINTN b) {
 //MATH: Returns the larger of two values.
 UINTN max(UINTN a, UINTN b) {
 	if (a > b) { return a; } else { return b; }
+}
+
+//STDLIB: Allocates a block of memory with the specified size.
+MEMBLOCK malloc(UINTN size) {
+	MEMBLOCK result;
+	EFI_STATUS status;
+	void *handle;
+	status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, size + sizeof(UINTN), &handle);
+	if (status == EFI_OUT_OF_RESOURCES) {
+		result.Start = NULL;
+		result.Size = 0;
+	}
+	else if (status == EFI_INVALID_PARAMETER) {
+		result.Start = NULL;
+		result.Size = 0;
+	}
+	else {
+		result.Start = handle;
+		result.Size = size;
+	}
+	return result;
 }
 
 
