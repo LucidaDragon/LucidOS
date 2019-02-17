@@ -99,24 +99,24 @@ MEMBLOCK calloc(UINTN num, UINTN size) {
 }
 
 //STDLIB: Deallocates the specified block of memory.
-void free(MEMBLOCK block) {
-	uefi_call_wrapper(BS->FreePool, 1, block.Start);
-	block.Start = NULL;
-	block.Size = 0;
+void free(MEMBLOCK *block) {
+	uefi_call_wrapper(BS->FreePool, 1, block->Start);
+	block->Start = NULL;
+	block->Size = 0;
 }
 
 //STDLIB: Resizes the specified block of memory.
-MEMBLOCK realloc(MEMBLOCK block, UINTN size) {
+MEMBLOCK realloc(MEMBLOCK *block, UINTN size) {
 	MEMBLOCK result = malloc(size);
-	uefi_call_wrapper(BS->CopyMem, 3, result.Start, block.Start, size);
+	uefi_call_wrapper(BS->CopyMem, 3, result.Start, block->Start, size);
 	free(block);
 	return result;
 }
 
 //STDLIB: Creates a copy of the specified block of memory.
-MEMBLOCK memcopy(MEMBLOCK block) {
-	MEMBLOCK result = malloc(block.Size);
-	uefi_call_wrapper(BS->CopyMem, 3, result.Start, block.Start, block.Size);
+MEMBLOCK memcopy(MEMBLOCK *block) {
+	MEMBLOCK result = malloc(block->Size);
+	uefi_call_wrapper(BS->CopyMem, 3, result.Start, block->Start, block->Size);
 	return result;
 }
 
@@ -261,6 +261,20 @@ void Environment(ENVIRONMENT *e) {
 	FillRect(e, &r, EFI_RED);
 	DrawRect(e, &r, EFI_BLUE);
 	SetColor(e, EFI_BLACK, EFI_WHITE);*/
+
+	MEMBLOCK m = malloc(1000);
+	Print(L"Created block at %u\n", m.Start);
+	Print(L"Block size is %u\n", m.Size);
+	MEMBLOCK n = memcopy(&m);
+	Print(L"Copied a block to %u\n", n.Start);
+	Print(L"Block size is %u\n", n.Size);
+	MEMBLOCK o = realloc(&m, 2000);
+	Print(L"Reallocated block %u to %u\n", m.Start, o.Start);
+	Print(L"Block size is now: %u\n", o.Size);
+	free(&m);
+	free(&n);
+	free(&o);
+	Print(L"All memory is now free.");
 
 	Print(L"\n\nPress any key to exit.\n");
 	WaitForKey(e);
