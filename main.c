@@ -91,6 +91,35 @@ MEMBLOCK malloc(UINTN size) {
 	return result;
 }
 
+//STDLIB: Allocates a block of memory for the specified number of items of the specified size.
+MEMBLOCK calloc(UINTN num, UINTN size) {
+	MEMBLOCK result = malloc(num * size);
+	uefi_call_wrapper(BS->SetMem, 3, result.Start, result.Size, 0);
+	return result;
+}
+
+//STDLIB: Deallocates the specified block of memory.
+void free(MEMBLOCK block) {
+	uefi_call_wrapper(BS->FreePool, 1, block.Start);
+	block.Start = NULL;
+	block.Size = 0;
+}
+
+//STDLIB: Resizes the specified block of memory.
+MEMBLOCK realloc(MEMBLOCK block, UINTN size) {
+	MEMBLOCK result = malloc(size);
+	uefi_call_wrapper(BS->CopyMem, 3, result.Start, block.Start, size);
+	free(block);
+	return result;
+}
+
+//STDLIB: Creates a copy of the specified block of memory.
+MEMBLOCK memcopy(MEMBLOCK block) {
+	MEMBLOCK result = malloc(block.Size);
+	uefi_call_wrapper(BS->CopyMem, 3, result.Start, block.Start, block.Size);
+	return result;
+}
+
 
 
 
