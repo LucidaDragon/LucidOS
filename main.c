@@ -68,12 +68,14 @@ typedef struct {
 
 //MATH: Returns the smaller of two values.
 UINTN min(UINTN a, UINTN b) {
-	if (a < b) { return a; } else { return b; }
+	if (a < b) { return a; }
+	else { return b; }
 }
 
 //MATH: Returns the larger of two values.
 UINTN max(UINTN a, UINTN b) {
-	if (a > b) { return a; } else { return b; }
+	if (a > b) { return a; }
+	else { return b; }
 }
 
 //STDLIB: Allocates a block of memory with the specified size.
@@ -126,6 +128,18 @@ MEMBLOCK memcopy(MEMBLOCK *block) {
 	return result;
 }
 
+//Gets the amount of available memory, rounded to the specified base.
+UINTN memavail(UINTN base) {
+	UINTN size = base;
+	MEMBLOCK m = malloc(size);
+	while (m.Start != NULL) {
+		free(&m);
+		m = malloc(size + base);
+		if (m.Start != NULL) size += base;
+	}
+	return size;
+}
+
 
 
 
@@ -148,6 +162,21 @@ void WaitForKey(ENVIRONMENT *e) {
 	UINTN event;
 	e->Table->ConIn->Reset(e->Table->ConIn, FALSE);
 	e->Table->BootServices->WaitForEvent(1, &e->Table->ConIn->WaitForKey, &event);
+}
+
+//Waits for the specified key to be pressed.
+void WaitForSpecificKey(ENVIRONMENT *e, CHAR16 key) {
+	UINTN event;
+	EFI_INPUT_KEY pressed;
+	e->Table->ConIn->Reset(e->Table->ConIn, FALSE);
+	while (TRUE)
+	{
+		e->Table->BootServices->WaitForEvent(1, &e->Table->ConIn->WaitForKey, &event);
+		e->Table->ConIn->ReadKeyStroke(e->Table->ConIn, &pressed);
+		if (pressed.UnicodeChar == key) {
+			return;
+		}
+	}
 }
 
 //Prints the current system time.
@@ -267,15 +296,357 @@ void DrawRect(ENVIRONMENT *e, RECT *r, UINT8 color) {
 	}
 }
 
+
+
+
+
+//
+// LucidOS Runtime Definitions
+//
+
+//
+// #Structure Definitions#
+//
+
+//Represents a runtime array.
+typedef struct
+{
+	UINTN Start;
+} Array;
+
+//Represents a runtime int in memory.
+typedef struct
+{
+	BOOLEAN IsNull;
+	INTN Value;
+} Int;
+
+//Special calls that do not run a user-defined function.
+typedef enum
+{
+	Add = 1,
+	Subtract = 2,
+	Multiply = 3,
+	Divide = 4
+} SpecialCall;
+
+//Runtime environment registers.
+typedef struct
+{
+	INTN eax; //Return value
+	INTN ebx; //Param 1
+	INTN ecx; //Param 2
+	INTN edx; //Param 3
+	UINTN esi; //Source pointer
+	UINTN edi; //Dest pointer
+	UINTN ebp; //Stack frame pointer
+	UINTN esp; //Stack top pointer
+
+	UINTN inp; //Instruction pointer
+
+	UINTN hpp; //Heap pointer
+} Registers;
+
+//Represents the runtime environment.
+typedef struct
+{
+	Registers Registers;
+	UINTN HeapLength;
+	UINTN StackLength;
+	Int *HeapMemory;
+	Int *StackMemory;
+} EE;
+
+//
+// #Array/Memory Functions#
+//
+
+//Get the length of a runtime array.
+UINTN GetArrayLength(UINTN start, Int *source) {
+	int i = 0;
+	while (!source[start + i].IsNull)
+	{
+		i++;
+	}
+	return i;
+}
+
+//Get the element in a runtime array.
+Int GetArrayElement(UINTN start, UINTN index, Int *source) {
+	return source[start + index];
+}
+
+//Allocate runtime memory.
+UINTN Malloc(EE *ee, UINTN size) {
+	UINTN start = ee->Registers.hpp + 1;
+	for (UINTN i = start; i < ee->Registers.hpp + 1 + size; i++) //Zero fill the new memory.
+	{
+		ee->HeapMemory[i].Value = 0;
+		ee->HeapMemory[i].IsNull = FALSE;
+	}
+	//Update the heap size with an extra null entry to mark the end.
+	ee->Registers.hpp += size + 1;
+	ee->HeapMemory[ee->Registers.hpp].Value = 0;
+	ee->HeapMemory[ee->Registers.hpp].IsNull = FALSE;
+	return start;
+}
+
+//Allocate runtime memory with a specified element width.
+UINTN Calloc(EE *ee, UINTN count, UINTN size) {
+	return Malloc(ee, count * size);
+}
+
+//Free runtime memory.
+void Free(EE *ee, UINTN start) {
+	UINTN len = GetArrayLength(start, ee->HeapMemory);
+	for (UINTN i = 0; i < len; i++) //Zero fill the old memory.
+	{
+		ee->HeapMemory[i + start].Value = 0;
+		ee->HeapMemory[i + start].IsNull = TRUE;
+	}
+	for (UINTN i = start + len + 2; i < ee->Registers.hpp; i++) //Shift all of the memory after it down to take its place.
+	{
+		ee->HeapMemory[i - len - 2].Value = ee->HeapMemory[i].Value;
+		ee->HeapMemory[i - len - 2].IsNull = FALSE;
+	}
+	for (UINTN i = ee->Registers.hpp; i < ee->HeapLength; i++) //Zero fill the remaining free space.
+	{
+		ee->HeapMemory[i].Value = 0;
+		ee->HeapMemory[i].IsNull = TRUE;
+	}
+	ee->Registers.hpp -= len; //Update end of heap.
+}
+
+//Create an array in runtime memory.
+Array CreateArray(EE *ee, UINTN length) {
+	Array result;
+	result.Start = Malloc(ee, length);
+	return result;
+}
+
+//Remove an array from runtime memory.
+void DestroyArray(EE *ee, Array arr) {
+	Free(ee, arr.Start);
+}
+
+//
+// #Stack Functions#
+//
+
+//Push to the runtime stack.
+void Push(EE *ee, INTN value) {
+	ee->StackMemory[ee->Registers.esp].IsNull = FALSE;
+	ee->StackMemory[ee->Registers.esp].Value = value;
+	ee->Registers.esp += 1;
+}
+
+//Pop from the runtime stack.
+INTN Pop(EE *ee) {
+	INTN value = ee->StackMemory[ee->Registers.esp].Value;
+	ee->StackMemory[ee->Registers.esp].IsNull = TRUE;
+	ee->StackMemory[ee->Registers.esp].Value = 0;
+	ee->Registers.esp -= 1;
+	return value;
+}
+
+//
+// #Call Methods#
+//
+
+//Calls a special runtime operation.
+void CallSpecial(EE *ee, SpecialCall call, Array args) {
+	if (call == Add)
+	{
+		INTN result = 0;
+		for (UINTN i = 0; i < GetArrayLength(args.Start, ee->HeapMemory); i++)
+		{
+			if (i == 0)
+			{
+				result = GetArrayElement(args.Start, i, ee->HeapMemory).Value;
+			}
+			else
+			{
+				result += GetArrayElement(args.Start, i, ee->HeapMemory).Value;
+			}
+		}
+		Push(ee, result);
+	}
+	else if (call == Subtract)
+	{
+		INTN result = 0;
+		for (UINTN i = 0; i < GetArrayLength(args.Start, ee->HeapMemory); i++)
+		{
+			if (i == 0)
+			{
+				result = GetArrayElement(args.Start, i, ee->HeapMemory).Value;
+			}
+			else
+			{
+				result -= GetArrayElement(args.Start, i, ee->HeapMemory).Value;
+			}
+		}
+		Push(ee, result);
+	}
+	else if (call == Multiply)
+	{
+		INTN result = 0;
+		for (UINTN i = 0; i < GetArrayLength(args.Start, ee->HeapMemory); i++)
+		{
+			if (i == 0)
+			{
+				result = GetArrayElement(args.Start, i, ee->HeapMemory).Value;
+			}
+			else
+			{
+				result *= GetArrayElement(args.Start, i, ee->HeapMemory).Value;
+			}
+		}
+		Push(ee, result);
+	}
+	else if (call == Divide)
+	{
+		INTN result = 0;
+		for (UINTN i = 0; i < GetArrayLength(args.Start, ee->HeapMemory); i++)
+		{
+			if (i == 0)
+			{
+				result = GetArrayElement(args.Start, i, ee->HeapMemory).Value;
+			}
+			else
+			{
+				result /= GetArrayElement(args.Start, i, ee->HeapMemory).Value;
+			}
+		}
+		Push(ee, result);
+	}
+}
+
+//Calls a user-defined runtime operation.
+void Call(EE *ee, UINTN location, Array args) {
+	Push(ee, ee->Registers.eax);
+	Push(ee, ee->Registers.ebx);
+	Push(ee, ee->Registers.ecx);
+	Push(ee, ee->Registers.edx);
+	Push(ee, ee->Registers.esi);
+	Push(ee, ee->Registers.edi);
+	Push(ee, ee->Registers.ebp);
+	Push(ee, ee->Registers.inp);
+	ee->Registers.ebp = ee->Registers.esp;
+	ee->Registers.inp = location;
+
+	UINTN argLen = GetArrayLength(args.Start, ee->HeapMemory);
+	Push(ee, argLen);
+	for (UINTN i = 0; i < argLen; i++)
+	{
+		Push(ee, GetArrayElement(args.Start, i, ee->HeapMemory).Value);
+	}
+}
+
+//
+// #Function Info Methods#
+//
+
+//Gets the argument count for the current runtime function.
+UINTN GetArgCount(EE *ee) {
+	return ee->StackMemory[ee->Registers.ebp].Value;
+}
+
+//Gets an argument for the current runtime function.
+INTN GetArg(EE *ee, UINTN i) {
+	return ee->StackMemory[ee->Registers.ebp + i + 1].Value;
+}
+
+//Gets the local variable count for the current runtime function.
+UINTN GetLocalCount(EE *ee) {
+	return GetArrayLength(ee->Registers.ebp + GetArgCount(ee) + 1, ee->StackMemory);
+}
+
+//Gets a local value for the current runtime function.
+INTN GetLocal(EE *ee, UINTN i) {
+	return ee->StackMemory[ee->Registers.ebp + GetArgCount(ee) + 1 + i].Value;
+}
+
+//
+// #Call Return Method#
+//
+
+//Returns a value from the current runtime function and puts it on the stack.
+void Return(EE *ee) {
+	INTN ret = ee->Registers.eax;
+	while (ee->Registers.esp > ee->Registers.ebp)
+	{
+		Pop(ee);
+	}
+	ee->Registers.inp = Pop(ee);
+	ee->Registers.ebp = Pop(ee);
+	ee->Registers.edi = Pop(ee);
+	ee->Registers.esi = Pop(ee);
+	ee->Registers.edx = Pop(ee);
+	ee->Registers.ecx = Pop(ee);
+	ee->Registers.ebx = Pop(ee);
+	ee->Registers.eax = Pop(ee);
+	Push(ee, ret);
+}
+
+//
+// #Runtime Environment Entrypoint#
+//
+
+//Begins execution in the specified runtime environment.
+UINTN Main(EE *ee) {
+	return 0;
+}
+
+//
+// #Runtime Environment Constructor#
+//
+
+//Constructs a runtime environment and begins execution.
+UINTN Enter(ENVIRONMENT *e, UINTN heapSize, UINTN stackSize) {
+	EE env;
+	env.HeapLength = heapSize;
+	env.StackLength = stackSize;
+	MEMBLOCK heap = calloc(env.HeapLength, sizeof(UINTN));
+	MEMBLOCK stack = calloc(env.StackLength, sizeof(UINTN));
+	env.HeapMemory = heap.Start; //Produces indirection warning, can be ignored.
+	env.StackMemory = stack.Start; //Produces indirection warning, can be ignored.
+
+	if (env.StackMemory == NULL || env.HeapMemory == NULL) {
+		Print(L"Failed to assign the requested memory space for the program.\nSpace Requested: %u bytes\n", (heapSize + stackSize) * sizeof(UINTN));
+		return -1;
+	}
+
+	Print(L"Stack Location: %x\n", env.StackMemory);
+	Print(L"Heap Location: %x\n", env.HeapMemory);
+
+	UINTN ret = Main(&env);
+
+	Print(L"Exiting With Code: %u", ret);
+
+	free(&heap);
+	free(&stack);
+
+	return ret;
+}
+
+
+
+
+
+//
+// LucidOS Entry
+//
+
 //
 // #Environment Runtime Functions#
 //
 
-//Enters a new OS environment space.
+//Enters a new OS environment.
 void Environment(ENVIRONMENT *e) {
 	ClearScreen(e);
 
-	/*DrawBar(e, EFI_RED);
+	/*//Colors test
+	DrawBar(e, EFI_RED);
 	DrawBar(e, EFI_YELLOW);
 	DrawBar(e, EFI_GREEN);
 	DrawBar(e, EFI_BLUE);
@@ -304,25 +675,28 @@ void Environment(ENVIRONMENT *e) {
 	Print(L"%NPress any key to continue...");
 	WaitForKey(e);*/
 
-	/*Clear(e, EFI_WHITE);
+	/*//Graphics test
+	Clear(e, EFI_WHITE);
 	RECT r; r.X = 3; r.Y = 3; r.Width = 10; r.Height = 5;
 	FillRect(e, &r, EFI_RED);
 	DrawRect(e, &r, EFI_BLUE);
-	SetColor(e, EFI_BLACK, EFI_WHITE);*/
+	SetColor(e, EFI_BLACK, EFI_WHITE);
+	WaitForKey(e);*/
 
-	MEMBLOCK m = malloc(1000);
-	Print(L"Created block at %u\n", m.Start);
-	Print(L"Block size is %u\n", m.Size);
-	MEMBLOCK n = memcopy(&m);
-	Print(L"Copied a block to %u\n", n.Start);
-	Print(L"Block size is %u\n", n.Size);
-	MEMBLOCK o = realloc(&m, 2000);
-	Print(L"Reallocated block %u to %u\n", m.Start, o.Start);
-	Print(L"Block size is now: %u\n", o.Size);
-	free(&m);
-	free(&n);
-	free(&o);
-	Print(L"All memory is now free.");
+	/*//Stacks test
+	STACKNODE *s = CreateStack(0);
+	StackPush(&s, 300);
+	StackPush(&s, 200);
+	StackPush(&s, 100);
+
+	Print(L"%u\n", StackPop(&s));
+	Print(L"%u\n", StackPop(&s));
+	Print(L"%u\n", StackPop(&s));
+	Print(L"%u\n", StackPop(&s));
+
+	WaitForSpecificKey(e, L'A');*/
+
+	Enter(e, 1000000000, 1000000);
 
 	Print(L"\n\nPress any key to exit.\n");
 	WaitForKey(e);
@@ -373,8 +747,7 @@ void InitEnvironment(EFI_HANDLE *image, EFI_SYSTEM_TABLE *table) {
 //
 
 // Application entrypoint (must be set to 'efi_main' for gnu-efi crt0 compatibility)
-EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
-{
+EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 #if defined(_GNU_EFI)
 	InitializeLib(ImageHandle, SystemTable);
 #endif
@@ -391,7 +764,7 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 	Print(L"%HLoaded%N");
 
 	InitEnvironment(ImageHandle, SystemTable);
-	
+
 #if defined(_DEBUG)
 	// If running in debug mode, use the EFI shut down call to close QEMU
 	SystemTable->RuntimeServices->ResetSystem(EfiResetShutdown, EFI_SUCCESS, 0, NULL);
