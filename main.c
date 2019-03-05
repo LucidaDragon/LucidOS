@@ -29,6 +29,7 @@ typedef struct {
 typedef struct {
 	EFI_HANDLE *Image;
 	EFI_SYSTEM_TABLE *Table;
+	EFI_FILE *File;
 	SCREEN Screen;
 } ENVIRONMENT;
 
@@ -57,6 +58,13 @@ typedef struct {
 	UINTN Value;
 	void *Next;
 } STACKNODE;
+
+//Object that represents a list.
+typedef struct LISTNODE {
+	void *Data;
+	UINTN Key;
+	struct LISTNODE *Next;
+} LISTNODE;
 
 
 
@@ -128,16 +136,140 @@ MEMBLOCK memcopy(MEMBLOCK *block) {
 	return result;
 }
 
-//Gets the amount of available memory, rounded to the specified base.
-UINTN memavail(UINTN base) {
-	UINTN size = base;
-	MEMBLOCK m = malloc(size);
-	while (m.Start != NULL) {
-		free(&m);
-		m = malloc(size + base);
-		if (m.Start != NULL) size += base;
+//
+// #List Functions
+//
+
+void ForEach(LISTNODE *list, void(*loop)(LISTNODE*)) {
+	LISTNODE *elem = list;
+
+	while (elem != NULL)
+	{
+		loop(elem);
+		elem = elem->Next;
 	}
-	return size;
+}
+
+void InsertFirst(LISTNODE *list, UINTN Key, void *Data) {
+	LISTNODE *link = (LISTNODE*)malloc(sizeof(LISTNODE)).Start;
+	link->Key = Key;
+	link->Data = Data;
+	link->Next = list;
+	list = link;
+}
+
+LISTNODE* DeleteFirst(LISTNODE *list) {
+	LISTNODE *tempLink = list;
+	list = list->Next;
+	return tempLink;
+}
+
+BOOLEAN IsEmpty(LISTNODE *list) {
+	return list == NULL;
+}
+
+UINTN Length(LISTNODE *list) {
+	UINTN length = 0;
+	LISTNODE *current;
+
+	for (current = list; current != NULL; current = current->Next) {
+		length++;
+	}
+
+	return length;
+}
+
+LISTNODE* ElementAt(LISTNODE *list, UINTN Key) {
+	LISTNODE* current = list;
+
+	if (list == NULL) {
+		return NULL;
+	}
+
+	while (current->Key != Key) {
+		if (current->Next == NULL) {
+			return NULL;
+		}
+		else {
+			current = current->Next;
+		}
+	}
+
+	return current;
+}
+
+LISTNODE* Delete(LISTNODE *list, UINTN Key) {
+	LISTNODE* current = list;
+	LISTNODE* previous = NULL;
+
+	if (list == NULL) {
+		return NULL;
+	}
+
+	while (current->Key != Key) {
+		if (current->Next == NULL) {
+			return NULL;
+		}
+		else {
+			previous = current;
+			current = current->Next;
+		}
+	}
+
+	if (current == list) {
+		list = list->Next;
+	}
+	else {
+		previous->Next = current->Next;
+	}
+
+	return current;
+}
+
+void Sort(LISTNODE *list) {
+	UINTN i, j, k, tempKey;
+	void *tempData;
+	LISTNODE *current;
+	LISTNODE *next;
+
+	UINTN size = Length(list);
+	k = size;
+
+	for (i = 0; i < size - 1; i++, k--) {
+		current = list;
+		next = list->Next;
+
+		for (j = 1; j < k; j++) {
+
+			if (current->Data > next->Data) {
+				tempData = current->Data;
+				current->Data = next->Data;
+				next->Data = tempData;
+
+				tempKey = current->Key;
+				current->Key = next->Key;
+				next->Key = tempKey;
+			}
+
+			current = current->Next;
+			next = next->Next;
+		}
+	}
+}
+
+void Reverse(LISTNODE** head_ref) {
+	LISTNODE* prev = NULL;
+	LISTNODE* current = *head_ref;
+	LISTNODE* next;
+
+	while (current != NULL) {
+		next = current->Next;
+		current->Next = prev;
+		prev = current;
+		current = next;
+	}
+
+	*head_ref = prev;
 }
 
 
@@ -602,7 +734,7 @@ UINTN Main(EE *ee) {
 //
 
 //Constructs a runtime environment and begins execution.
-UINTN Enter(ENVIRONMENT *e, UINTN heapSize, UINTN stackSize) {
+UINTN Enter(ENVIRONMENT *e, UINTN inp, UINTN heapSize, UINTN stackSize) {
 	EE env;
 	env.HeapLength = heapSize;
 	env.StackLength = stackSize;
@@ -610,6 +742,7 @@ UINTN Enter(ENVIRONMENT *e, UINTN heapSize, UINTN stackSize) {
 	MEMBLOCK stack = calloc(env.StackLength, sizeof(UINTN));
 	env.HeapMemory = heap.Start; //Produces indirection warning, can be ignored.
 	env.StackMemory = stack.Start; //Produces indirection warning, can be ignored.
+	env.Registers.inp = inp;
 
 	if (env.StackMemory == NULL || env.HeapMemory == NULL) {
 		Print(L"Failed to assign the requested memory space for the program.\nSpace Requested: %u bytes\n", (heapSize + stackSize) * sizeof(UINTN));
@@ -628,6 +761,20 @@ UINTN Enter(ENVIRONMENT *e, UINTN heapSize, UINTN stackSize) {
 
 	return ret;
 }
+
+//Load the specified executable into memory.
+//MEMBLOCK Load(ENVIRONMENT *e, CHAR16 *Name) {
+//	EFI_FILE *current;
+//	e->File->Open(e->File, &current, Name, EFI_FILE_MODE_READ, EFI_FILE_READ_ONLY);
+//
+//	UINTN size;
+//	EFI_FILE_INFO *info;
+//	current->GetInfo(current, &gEfiFileInfoGuid, &size, NULL);
+//	e->Table->BootServices->AllocatePool(EfiLoaderData, size, info);
+//
+//	current->Read(e->File, size, m.Start);
+//	return m;
+//}
 
 
 
@@ -696,8 +843,6 @@ void Environment(ENVIRONMENT *e) {
 
 	WaitForSpecificKey(e, L'A');*/
 
-	Enter(e, 1000000000, 1000000);
-
 	Print(L"\n\nPress any key to exit.\n");
 	WaitForKey(e);
 }
@@ -738,6 +883,12 @@ void InitEnvironment(EFI_HANDLE *image, EFI_SYSTEM_TABLE *table) {
 	e.Image = image;
 	e.Table = table;
 	e.Screen = ConfigureDisplay(table);
+
+	EFI_LOADED_IMAGE_PROTOCOL *LoadedImage;
+	table->BootServices->HandleProtocol(image, &gEfiLoadedImageProtocolGuid, &LoadedImage);
+	EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *FileSystem;
+	table->BootServices->HandleProtocol(LoadedImage->DeviceHandle, &gEfiSimpleFileSystemProtocolGuid, &FileSystem);
+	FileSystem->OpenVolume(FileSystem, &e.File);
 
 	Environment(&e);
 }
