@@ -14,57 +14,73 @@
 //
 
 //Object that has a width and height.
-typedef struct {
+typedef struct
+{
 	UINTN Width;
 	UINTN Height;
-} SIZE;
+} Size;
 
 //Object that defines a screen size and mode.
-typedef struct {
-	SIZE Size;
+typedef struct
+{
+	Size Size;
 	UINTN Mode;
-} SCREEN;
+} Screen;
 
 //Object that contains all of the environment parameters.
-typedef struct {
-	EFI_HANDLE *Image;
-	EFI_SYSTEM_TABLE *Table;
-	EFI_FILE *File;
-	SCREEN Screen;
-} ENVIRONMENT;
+typedef struct
+{
+	EFI_HANDLE* Image;
+	EFI_SYSTEM_TABLE* Table;
+	EFI_FILE* File;
+	Screen Screen;
+} Environment;
 
 //Object that has a x and y position.
-typedef struct {
+typedef struct
+{
 	UINTN X;
 	UINTN Y;
-} POINT;
+} Point;
 
 //Object that has a x position, y position, width, and height.
-typedef struct {
+typedef struct
+{
 	UINTN X;
 	UINTN Y;
 	UINTN Width;
 	UINTN Height;
-} RECT;
+} Rect;
 
 //Object that represents a block of memory.
-typedef struct {
-	void *Start;
+typedef struct
+{
+	void* Start;
 	UINTN Size;
-} MEMBLOCK;
+} MemBlock;
 
 //Object that represents a stack.
-typedef struct {
-	UINTN Value;
-	void *Next;
-} STACKNODE;
+typedef struct
+{
+	void* Value;
+	void* Next;
+} StackNode;
 
-//Object that represents a list.
-typedef struct LISTNODE {
-	void *Data;
+//Object that represents a linked list.
+typedef struct LinkedListNode
+{
+	void* Data;
 	UINTN Key;
-	struct LISTNODE *Next;
-} LISTNODE;
+	struct LinkedListNode* Next;
+} LinkedListNode;
+
+//Object that represents an array list.
+typedef struct
+{
+	MemBlock Data;
+	UINTN Length;
+	UINTN Capacity;
+} ArrayList;
 
 
 
@@ -75,32 +91,38 @@ typedef struct LISTNODE {
 //
 
 //MATH: Returns the smaller of two values.
-UINTN min(UINTN a, UINTN b) {
-	if (a < b) { return a; }
-	else { return b; }
+UINTN min(UINTN a, UINTN b)
+{
+	if (a < b) return a;
+	else return b;
 }
 
 //MATH: Returns the larger of two values.
-UINTN max(UINTN a, UINTN b) {
-	if (a > b) { return a; }
-	else { return b; }
+UINTN max(UINTN a, UINTN b)
+{
+	if (a > b) return a;
+	else return b;
 }
 
 //STDLIB: Allocates a block of memory with the specified size.
-MEMBLOCK malloc(UINTN size) {
-	MEMBLOCK result;
+MemBlock malloc(UINTN size)
+{
+	MemBlock result;
 	EFI_STATUS status;
-	void *handle;
-	status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, size + sizeof(UINTN), &handle);
-	if (status == EFI_OUT_OF_RESOURCES) {
+	void* handle;
+	status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, size, &handle);
+	if (status == EFI_OUT_OF_RESOURCES)
+	{
 		result.Start = NULL;
 		result.Size = 0;
 	}
-	else if (status == EFI_INVALID_PARAMETER) {
+	else if (status == EFI_INVALID_PARAMETER)
+	{
 		result.Start = NULL;
 		result.Size = 0;
 	}
-	else {
+	else
+	{
 		result.Start = handle;
 		result.Size = size;
 	}
@@ -108,168 +130,118 @@ MEMBLOCK malloc(UINTN size) {
 }
 
 //STDLIB: Allocates a block of memory for the specified number of items of the specified size.
-MEMBLOCK calloc(UINTN num, UINTN size) {
-	MEMBLOCK result = malloc(num * size);
+MemBlock calloc(UINTN num, UINTN size)
+{
+	MemBlock result = malloc(num * size);
 	uefi_call_wrapper(BS->SetMem, 3, result.Start, result.Size, 0);
 	return result;
 }
 
 //STDLIB: Deallocates the specified block of memory.
-void free(MEMBLOCK *block) {
+void free(MemBlock* block)
+{
 	uefi_call_wrapper(BS->FreePool, 1, block->Start);
 	block->Start = NULL;
 	block->Size = 0;
 }
 
+void freeany(void* ptr)
+{
+	uefi_call_wrapper(BS->FreePool, 1, ptr);
+}
+
 //STDLIB: Resizes the specified block of memory.
-MEMBLOCK realloc(MEMBLOCK *block, UINTN size) {
-	MEMBLOCK result = malloc(size);
+MemBlock realloc(MemBlock* block, UINTN size)
+{
+	MemBlock result = malloc(size);
 	uefi_call_wrapper(BS->CopyMem, 3, result.Start, block->Start, size);
 	free(block);
 	return result;
 }
 
 //STDLIB: Creates a copy of the specified block of memory.
-MEMBLOCK memcopy(MEMBLOCK *block) {
-	MEMBLOCK result = malloc(block->Size);
+MemBlock memcopy(MemBlock* block)
+{
+	MemBlock result = malloc(block->Size);
 	uefi_call_wrapper(BS->CopyMem, 3, result.Start, block->Start, block->Size);
 	return result;
 }
 
 //
-// #List Functions
+// #Linked List Functions#
 //
 
-void ForEach(LISTNODE *list, void(*loop)(LISTNODE*)) {
-	LISTNODE *elem = list;
 
-	while (elem != NULL)
+
+//
+// #Array List Functions#
+//
+
+void New_ArrayList(ArrayList* list, UINTN elementWidth)
+{
+	list->Length = 0;
+	list->Capacity = 1;
+	list->Data = malloc(sizeof(void*));
+}
+
+void Dispose_ArrayList(ArrayList* list)
+{
+	list->Length = 0;
+	list->Capacity = 0;
+	free(&list->Data);
+}
+
+void ArrayList_Add(ArrayList* list, void* element)
+{
+	if (list->Length >= list->Capacity)
 	{
-		loop(elem);
-		elem = elem->Next;
+		list->Data = realloc(&list->Data, list->Capacity * 2);
 	}
+
+	((void**)list->Data.Start)[list->Length] = element;
+	list->Length += 1;
 }
 
-void InsertFirst(LISTNODE *list, UINTN Key, void *Data) {
-	LISTNODE *link = (LISTNODE*)malloc(sizeof(LISTNODE)).Start;
-	link->Key = Key;
-	link->Data = Data;
-	link->Next = list;
-	list = link;
+void ArrayList_Insert(ArrayList* list, void* element, UINTN index)
+{
+	ArrayList_Add(list, element);
+
+	for (UINTN i = index; i < list->Length - 1; i++)
+	{
+		((void**)list->Data.Start)[i + 1] = ((void**)list->Data.Start)[i];
+	}
+
+	((void**)list->Data.Start)[index] = element;
 }
 
-LISTNODE* DeleteFirst(LISTNODE *list) {
-	LISTNODE *tempLink = list;
-	list = list->Next;
-	return tempLink;
-}
+BOOLEAN ArrayList_Remove(ArrayList* list, void* element)
+{
+	BOOLEAN result = FALSE;
 
-BOOLEAN IsEmpty(LISTNODE *list) {
-	return list == NULL;
-}
+	for (UINTN i = 0; i < list->Length; i++)
+	{
+		void* current = ((void**)list->Data.Start)[i];
 
-UINTN Length(LISTNODE *list) {
-	UINTN length = 0;
-	LISTNODE *current;
+		if (current == element)
+		{
+			result = TRUE;
 
-	for (current = list; current != NULL; current = current->Next) {
-		length++;
-	}
-
-	return length;
-}
-
-LISTNODE* ElementAt(LISTNODE *list, UINTN Key) {
-	LISTNODE* current = list;
-
-	if (list == NULL) {
-		return NULL;
-	}
-
-	while (current->Key != Key) {
-		if (current->Next == NULL) {
-			return NULL;
-		}
-		else {
-			current = current->Next;
-		}
-	}
-
-	return current;
-}
-
-LISTNODE* Delete(LISTNODE *list, UINTN Key) {
-	LISTNODE* current = list;
-	LISTNODE* previous = NULL;
-
-	if (list == NULL) {
-		return NULL;
-	}
-
-	while (current->Key != Key) {
-		if (current->Next == NULL) {
-			return NULL;
-		}
-		else {
-			previous = current;
-			current = current->Next;
-		}
-	}
-
-	if (current == list) {
-		list = list->Next;
-	}
-	else {
-		previous->Next = current->Next;
-	}
-
-	return current;
-}
-
-void Sort(LISTNODE *list) {
-	UINTN i, j, k, tempKey;
-	void *tempData;
-	LISTNODE *current;
-	LISTNODE *next;
-
-	UINTN size = Length(list);
-	k = size;
-
-	for (i = 0; i < size - 1; i++, k--) {
-		current = list;
-		next = list->Next;
-
-		for (j = 1; j < k; j++) {
-
-			if (current->Data > next->Data) {
-				tempData = current->Data;
-				current->Data = next->Data;
-				next->Data = tempData;
-
-				tempKey = current->Key;
-				current->Key = next->Key;
-				next->Key = tempKey;
+			for (UINTN j = i; j < list->Length - 1; j++)
+			{
+				((void**)list->Data.Start)[j] = ((void**)list->Data.Start)[j + 1];
 			}
 
-			current = current->Next;
-			next = next->Next;
+			list->Length -= 1;
+			break;
 		}
 	}
-}
 
-void Reverse(LISTNODE** head_ref) {
-	LISTNODE* prev = NULL;
-	LISTNODE* current = *head_ref;
-	LISTNODE* next;
-
-	while (current != NULL) {
-		next = current->Next;
-		current->Next = prev;
-		prev = current;
-		current = next;
+	if (result && (list->Length < (list->Capacity / 2)))
+	{
+		list->Data = realloc(&list->Data, list->Capacity / 2);
 	}
 
-	*head_ref = prev;
+	return result;
 }
 
 
@@ -285,19 +257,22 @@ void Reverse(LISTNODE** head_ref) {
 //
 
 //Clears the screen and returns the caret to the top left corner.
-void ClearScreen(ENVIRONMENT *e) {
+void ClearScreen(Environment* e)
+{
 	e->Table->ConOut->ClearScreen(e->Table->ConOut);
 }
 
 //Waits for any key to be pressed.
-void WaitForKey(ENVIRONMENT *e) {
+void WaitForKey(Environment* e)
+{
 	UINTN event;
 	e->Table->ConIn->Reset(e->Table->ConIn, FALSE);
 	e->Table->BootServices->WaitForEvent(1, &e->Table->ConIn->WaitForKey, &event);
 }
 
 //Waits for the specified key to be pressed.
-void WaitForSpecificKey(ENVIRONMENT *e, CHAR16 key) {
+void WaitForSpecificKey(Environment* e, CHAR16 key)
+{
 	UINTN event;
 	EFI_INPUT_KEY pressed;
 	e->Table->ConIn->Reset(e->Table->ConIn, FALSE);
@@ -305,14 +280,16 @@ void WaitForSpecificKey(ENVIRONMENT *e, CHAR16 key) {
 	{
 		e->Table->BootServices->WaitForEvent(1, &e->Table->ConIn->WaitForKey, &event);
 		e->Table->ConIn->ReadKeyStroke(e->Table->ConIn, &pressed);
-		if (pressed.UnicodeChar == key) {
+		if (pressed.UnicodeChar == key)
+		{
 			return;
 		}
 	}
 }
 
 //Prints the current system time.
-void PrintTime(ENVIRONMENT *e, BOOLEAN newLine) {
+void PrintTime(Environment* e, BOOLEAN newLine)
+{
 	EFI_TIME time;
 	EFI_TIME_CAPABILITIES caps;
 	CHAR16 buf;
@@ -327,7 +304,8 @@ void PrintTime(ENVIRONMENT *e, BOOLEAN newLine) {
 }
 
 //Sets the cursor position.
-void SetPos(ENVIRONMENT *e, UINTN x, UINTN y) {
+void SetPos(Environment* e, UINTN x, UINTN y)
+{
 	e->Table->ConOut->SetCursorPosition(e->Table->ConOut, x, y);
 }
 
@@ -336,40 +314,43 @@ void SetPos(ENVIRONMENT *e, UINTN x, UINTN y) {
 //
 
 //Create a stack node.
-STACKNODE *CreateStack(UINTN value) {
-	STACKNODE *s = malloc(sizeof(STACKNODE)).Start;
-	s->Value = value;
+StackNode* New_StackNode(void* initialElement)
+{
+	StackNode* s = malloc(sizeof(StackNode)).Start;
+	s->Value = initialElement;
 	s->Next = NULL;
 	return s;
 }
 
 //Checks to see if a stack is empty.
-UINTN StackIsEmpty(STACKNODE *root) {
+BOOLEAN StackNode_IsEmpty(StackNode* root)
+{
 	return !root;
 }
 
 //Pushes to a stack.
-void StackPush(STACKNODE **root, UINTN value) {
-	STACKNODE *s = CreateStack(value);
+void StackNode_Push(StackNode** root, void* element)
+{
+	StackNode* s = New_StackNode(element);
 	s->Next = *root;
 	*root = s;
 }
 
 //Pops from a stack.
-UINTN StackPop(STACKNODE **root) {
-	if (StackIsEmpty(*root)) return 0;
-	STACKNODE *temp = *root;
+void* StackNode_Pop(StackNode** root)
+{
+	if (StackNode_IsEmpty(*root)) return NULL;
+	StackNode* node = *root;
 	*root = (*root)->Next;
-	UINTN popped = temp->Value;
-	MEMBLOCK m;
-	m.Start = temp;
-	free(&m);
-	return popped;
+	void* element = node->Value;
+	freeany(node);
+	return element;
 }
 
 //Peeks at a stack.
-UINTN StackPeek(STACKNODE *root) {
-	if (StackIsEmpty(root)) return 0;
+void* StackNode_Peek(StackNode* root)
+{
+	if (StackNode_IsEmpty(root)) return 0;
 	return root->Value;
 }
 
@@ -378,23 +359,27 @@ UINTN StackPeek(STACKNODE *root) {
 //
 
 //Sets the screen color to print in.
-void SetColor(ENVIRONMENT *e, UINT8 forecolor, UINT8 backcolor) {
+void SetColor(Environment* e, UINT8 forecolor, UINT8 backcolor)
+{
 	e->Table->ConOut->SetAttribute(e->Table->ConOut, EFI_TEXT_ATTR(forecolor, backcolor));
 }
 
 //Prints a full block character in the specified color.
-void PrintColor(ENVIRONMENT *e, UINT8 color) {
+void PrintColor(Environment* e, UINT8 color)
+{
 	SetColor(e, color, EFI_BLACK);
 	Print(L"█");
 }
 
 //Draw a horizontal bar that fills the screen.
-void DrawBar(ENVIRONMENT *e, UINT8 color) {
+void DrawBar(Environment* e, UINT8 color)
+{
 	for (UINTN i = 0; i < e->Screen.Size.Width; i++) PrintColor(e, color);
 }
 
 //Fills the screen with a color.
-void Clear(ENVIRONMENT *e, UINT8 color) {
+void Clear(Environment* e, UINT8 color)
+{
 	SetPos(e, 0, 0);
 	for (UINTN i = 0; i < e->Screen.Size.Height; i++) {
 		DrawBar(e, color);
@@ -403,7 +388,8 @@ void Clear(ENVIRONMENT *e, UINT8 color) {
 }
 
 //Fills a rectangle with the specified color.
-void FillRect(ENVIRONMENT *e, RECT *r, UINT8 color) {
+void FillRect(Environment* e, Rect* r, UINT8 color)
+{
 	for (UINTN y = 0; y < r->Height; y++) {
 		for (UINTN x = 0; x < r->Width; x++) {
 			SetPos(e, x + r->X, y + r->Y);
@@ -413,14 +399,15 @@ void FillRect(ENVIRONMENT *e, RECT *r, UINT8 color) {
 }
 
 //Draws a rectangle with the specified color.
-void DrawRect(ENVIRONMENT *e, RECT *r, UINT8 color) {
+void DrawRect(Environment* e, Rect* r, UINT8 color)
+{
 	for (UINTN i = 0; i < r->Width; i++) {
 		SetPos(e, i + r->X, r->Y);
 		PrintColor(e, color);
 		SetPos(e, i + r->X, r->Y + r->Height);
 		PrintColor(e, color);
 	}
-	for (UINTN i = 0; i < r->Height; i++) {
+	for (UINTN i = 0; i <= r->Height; i++) {
 		SetPos(e, r->X, i + r->Y);
 		PrintColor(e, color);
 		SetPos(e, r->X + r->Width, i + r->Y);
@@ -428,353 +415,37 @@ void DrawRect(ENVIRONMENT *e, RECT *r, UINT8 color) {
 	}
 }
 
-
-
-
-
 //
-// LucidOS Runtime Definitions
+// #Disk IO Functions#
 //
 
-//
-// #Structure Definitions#
-//
-
-//Represents a runtime array.
-typedef struct
+void GetEntries(Environment* e, EFI_FILE* directory, MemBlock* memory, EFI_FILE_INFO** results, UINTN* resultCount)
 {
-	UINTN Start;
-} Array;
-
-//Represents a runtime int in memory.
-typedef struct
-{
-	BOOLEAN IsNull;
-	INTN Value;
-} Int;
-
-//Special calls that do not run a user-defined function.
-typedef enum
-{
-	Add = 1,
-	Subtract = 2,
-	Multiply = 3,
-	Divide = 4
-} SpecialCall;
-
-//Runtime environment registers.
-typedef struct
-{
-	INTN eax; //Return value
-	INTN ebx; //Param 1
-	INTN ecx; //Param 2
-	INTN edx; //Param 3
-	UINTN esi; //Source pointer
-	UINTN edi; //Dest pointer
-	UINTN ebp; //Stack frame pointer
-	UINTN esp; //Stack top pointer
-
-	UINTN inp; //Instruction pointer
-
-	UINTN hpp; //Heap pointer
-} Registers;
-
-//Represents the runtime environment.
-typedef struct
-{
-	Registers Registers;
-	UINTN HeapLength;
-	UINTN StackLength;
-	Int *HeapMemory;
-	Int *StackMemory;
-} EE;
-
-//
-// #Array/Memory Functions#
-//
-
-//Get the length of a runtime array.
-UINTN GetArrayLength(UINTN start, Int *source) {
-	int i = 0;
-	while (!source[start + i].IsNull)
-	{
-		i++;
-	}
-	return i;
-}
-
-//Get the element in a runtime array.
-Int GetArrayElement(UINTN start, UINTN index, Int *source) {
-	return source[start + index];
-}
-
-//Allocate runtime memory.
-UINTN Malloc(EE *ee, UINTN size) {
-	UINTN start = ee->Registers.hpp + 1;
-	for (UINTN i = start; i < ee->Registers.hpp + 1 + size; i++) //Zero fill the new memory.
-	{
-		ee->HeapMemory[i].Value = 0;
-		ee->HeapMemory[i].IsNull = FALSE;
-	}
-	//Update the heap size with an extra null entry to mark the end.
-	ee->Registers.hpp += size + 1;
-	ee->HeapMemory[ee->Registers.hpp].Value = 0;
-	ee->HeapMemory[ee->Registers.hpp].IsNull = FALSE;
-	return start;
-}
-
-//Allocate runtime memory with a specified element width.
-UINTN Calloc(EE *ee, UINTN count, UINTN size) {
-	return Malloc(ee, count * size);
-}
-
-//Free runtime memory.
-void Free(EE *ee, UINTN start) {
-	UINTN len = GetArrayLength(start, ee->HeapMemory);
-	for (UINTN i = 0; i < len; i++) //Zero fill the old memory.
-	{
-		ee->HeapMemory[i + start].Value = 0;
-		ee->HeapMemory[i + start].IsNull = TRUE;
-	}
-	for (UINTN i = start + len + 2; i < ee->Registers.hpp; i++) //Shift all of the memory after it down to take its place.
-	{
-		ee->HeapMemory[i - len - 2].Value = ee->HeapMemory[i].Value;
-		ee->HeapMemory[i - len - 2].IsNull = FALSE;
-	}
-	for (UINTN i = ee->Registers.hpp; i < ee->HeapLength; i++) //Zero fill the remaining free space.
-	{
-		ee->HeapMemory[i].Value = 0;
-		ee->HeapMemory[i].IsNull = TRUE;
-	}
-	ee->Registers.hpp -= len; //Update end of heap.
-}
-
-//Create an array in runtime memory.
-Array CreateArray(EE *ee, UINTN length) {
-	Array result;
-	result.Start = Malloc(ee, length);
-	return result;
-}
-
-//Remove an array from runtime memory.
-void DestroyArray(EE *ee, Array arr) {
-	Free(ee, arr.Start);
-}
-
-//
-// #Stack Functions#
-//
-
-//Push to the runtime stack.
-void Push(EE *ee, INTN value) {
-	ee->StackMemory[ee->Registers.esp].IsNull = FALSE;
-	ee->StackMemory[ee->Registers.esp].Value = value;
-	ee->Registers.esp += 1;
-}
-
-//Pop from the runtime stack.
-INTN Pop(EE *ee) {
-	INTN value = ee->StackMemory[ee->Registers.esp].Value;
-	ee->StackMemory[ee->Registers.esp].IsNull = TRUE;
-	ee->StackMemory[ee->Registers.esp].Value = 0;
-	ee->Registers.esp -= 1;
-	return value;
-}
-
-//
-// #Call Methods#
-//
-
-//Calls a special runtime operation.
-void CallSpecial(EE *ee, SpecialCall call, Array args) {
-	if (call == Add)
-	{
-		INTN result = 0;
-		for (UINTN i = 0; i < GetArrayLength(args.Start, ee->HeapMemory); i++)
-		{
-			if (i == 0)
-			{
-				result = GetArrayElement(args.Start, i, ee->HeapMemory).Value;
-			}
-			else
-			{
-				result += GetArrayElement(args.Start, i, ee->HeapMemory).Value;
-			}
-		}
-		Push(ee, result);
-	}
-	else if (call == Subtract)
-	{
-		INTN result = 0;
-		for (UINTN i = 0; i < GetArrayLength(args.Start, ee->HeapMemory); i++)
-		{
-			if (i == 0)
-			{
-				result = GetArrayElement(args.Start, i, ee->HeapMemory).Value;
-			}
-			else
-			{
-				result -= GetArrayElement(args.Start, i, ee->HeapMemory).Value;
-			}
-		}
-		Push(ee, result);
-	}
-	else if (call == Multiply)
-	{
-		INTN result = 0;
-		for (UINTN i = 0; i < GetArrayLength(args.Start, ee->HeapMemory); i++)
-		{
-			if (i == 0)
-			{
-				result = GetArrayElement(args.Start, i, ee->HeapMemory).Value;
-			}
-			else
-			{
-				result *= GetArrayElement(args.Start, i, ee->HeapMemory).Value;
-			}
-		}
-		Push(ee, result);
-	}
-	else if (call == Divide)
-	{
-		INTN result = 0;
-		for (UINTN i = 0; i < GetArrayLength(args.Start, ee->HeapMemory); i++)
-		{
-			if (i == 0)
-			{
-				result = GetArrayElement(args.Start, i, ee->HeapMemory).Value;
-			}
-			else
-			{
-				result /= GetArrayElement(args.Start, i, ee->HeapMemory).Value;
-			}
-		}
-		Push(ee, result);
-	}
-}
-
-//Calls a user-defined runtime operation.
-void Call(EE *ee, UINTN location, Array args) {
-	Push(ee, ee->Registers.eax);
-	Push(ee, ee->Registers.ebx);
-	Push(ee, ee->Registers.ecx);
-	Push(ee, ee->Registers.edx);
-	Push(ee, ee->Registers.esi);
-	Push(ee, ee->Registers.edi);
-	Push(ee, ee->Registers.ebp);
-	Push(ee, ee->Registers.inp);
-	ee->Registers.ebp = ee->Registers.esp;
-	ee->Registers.inp = location;
-
-	UINTN argLen = GetArrayLength(args.Start, ee->HeapMemory);
-	Push(ee, argLen);
-	for (UINTN i = 0; i < argLen; i++)
-	{
-		Push(ee, GetArrayElement(args.Start, i, ee->HeapMemory).Value);
-	}
-}
-
-//
-// #Function Info Methods#
-//
-
-//Gets the argument count for the current runtime function.
-UINTN GetArgCount(EE *ee) {
-	return ee->StackMemory[ee->Registers.ebp].Value;
-}
-
-//Gets an argument for the current runtime function.
-INTN GetArg(EE *ee, UINTN i) {
-	return ee->StackMemory[ee->Registers.ebp + i + 1].Value;
-}
-
-//Gets the local variable count for the current runtime function.
-UINTN GetLocalCount(EE *ee) {
-	return GetArrayLength(ee->Registers.ebp + GetArgCount(ee) + 1, ee->StackMemory);
-}
-
-//Gets a local value for the current runtime function.
-INTN GetLocal(EE *ee, UINTN i) {
-	return ee->StackMemory[ee->Registers.ebp + GetArgCount(ee) + 1 + i].Value;
-}
-
-//
-// #Call Return Method#
-//
-
-//Returns a value from the current runtime function and puts it on the stack.
-void Return(EE *ee) {
-	INTN ret = ee->Registers.eax;
-	while (ee->Registers.esp > ee->Registers.ebp)
-	{
-		Pop(ee);
-	}
-	ee->Registers.inp = Pop(ee);
-	ee->Registers.ebp = Pop(ee);
-	ee->Registers.edi = Pop(ee);
-	ee->Registers.esi = Pop(ee);
-	ee->Registers.edx = Pop(ee);
-	ee->Registers.ecx = Pop(ee);
-	ee->Registers.ebx = Pop(ee);
-	ee->Registers.eax = Pop(ee);
-	Push(ee, ret);
-}
-
-//
-// #Runtime Environment Entrypoint#
-//
-
-//Begins execution in the specified runtime environment.
-UINTN Main(EE *ee) {
-	return 0;
-}
-
-//
-// #Runtime Environment Constructor#
-//
-
-//Constructs a runtime environment and begins execution.
-UINTN Enter(ENVIRONMENT *e, UINTN inp, UINTN heapSize, UINTN stackSize) {
-	EE env;
-	env.HeapLength = heapSize;
-	env.StackLength = stackSize;
-	MEMBLOCK heap = calloc(env.HeapLength, sizeof(UINTN));
-	MEMBLOCK stack = calloc(env.StackLength, sizeof(UINTN));
-	env.HeapMemory = heap.Start; //Produces indirection warning, can be ignored.
-	env.StackMemory = stack.Start; //Produces indirection warning, can be ignored.
-	env.Registers.inp = inp;
-
-	if (env.StackMemory == NULL || env.HeapMemory == NULL) {
-		Print(L"Failed to assign the requested memory space for the program.\nSpace Requested: %u bytes\n", (heapSize + stackSize) * sizeof(UINTN));
-		return -1;
-	}
-
-	Print(L"Stack Location: %x\n", env.StackMemory);
-	Print(L"Heap Location: %x\n", env.HeapMemory);
-
-	UINTN ret = Main(&env);
-
-	Print(L"Exiting With Code: %u", ret);
-
-	free(&heap);
-	free(&stack);
-
-	return ret;
+	UINTN size = 0;
+	directory->GetInfo(directory, &gEfiFileInfoGuid, &size, NULL);
+	MemBlock mem = malloc(size);
+	EFI_FILE_INFO* buffer = (EFI_FILE_INFO*)mem.Start;
+	directory->GetInfo(directory, &gEfiFileInfoGuid, &size, buffer);
+	*results = buffer;
+	*memory = mem;
 }
 
 //Load the specified executable into memory.
-//MEMBLOCK Load(ENVIRONMENT *e, CHAR16 *Name) {
-//	EFI_FILE *current;
-//	e->File->Open(e->File, &current, Name, EFI_FILE_MODE_READ, EFI_FILE_READ_ONLY);
-//
-//	UINTN size;
-//	EFI_FILE_INFO *info;
-//	current->GetInfo(current, &gEfiFileInfoGuid, &size, NULL);
-//	e->Table->BootServices->AllocatePool(EfiLoaderData, size, info);
-//
-//	current->Read(e->File, size, m.Start);
-//	return m;
-//}
+MemBlock Load(Environment* e, CHAR16* name)
+{
+	EFI_FILE* current;
+	e->File->Open(e->File, &current, name, EFI_FILE_MODE_READ, EFI_FILE_READ_ONLY);
+
+	UINTN size;
+	EFI_FILE_INFO info;
+	current->GetInfo(current, &gEfiFileInfoGuid, &size, &info);
+	MemBlock m = malloc(size);
+
+	current->Read(e->File, &size, m.Start);
+
+	e->File->Close(current);
+	return m;
+}
 
 
 
@@ -789,10 +460,11 @@ UINTN Enter(ENVIRONMENT *e, UINTN inp, UINTN heapSize, UINTN stackSize) {
 //
 
 //Enters a new OS environment.
-void Environment(ENVIRONMENT *e) {
+void EnterEnvironment(Environment* e)
+{
 	ClearScreen(e);
 
-	/*//Colors test
+	//Colors test
 	DrawBar(e, EFI_RED);
 	DrawBar(e, EFI_YELLOW);
 	DrawBar(e, EFI_GREEN);
@@ -820,28 +492,29 @@ void Environment(ENVIRONMENT *e) {
 	SetColor(e, EFI_WHITE, EFI_BLACK);
 
 	Print(L"%NPress any key to continue...");
-	WaitForKey(e);*/
+	WaitForKey(e);
 
-	/*//Graphics test
+	//Graphics test
 	Clear(e, EFI_WHITE);
-	RECT r; r.X = 3; r.Y = 3; r.Width = 10; r.Height = 5;
+	Rect r; r.X = 3; r.Y = 3; r.Width = 10; r.Height = 5;
 	FillRect(e, &r, EFI_RED);
 	DrawRect(e, &r, EFI_BLUE);
 	SetColor(e, EFI_BLACK, EFI_WHITE);
-	WaitForKey(e);*/
+	WaitForKey(e);
 
-	/*//Stacks test
-	STACKNODE *s = CreateStack(0);
-	StackPush(&s, 300);
-	StackPush(&s, 200);
-	StackPush(&s, 100);
+	//Stacks test
+	UINTN vals[4] = { 100, 300, 200, 0 };
+	StackNode* s = New_StackNode(&vals[3]);
+	StackNode_Push(&s, &vals[1]);
+	StackNode_Push(&s, &vals[2]);
+	StackNode_Push(&s, &vals[0]);
 
-	Print(L"%u\n", StackPop(&s));
-	Print(L"%u\n", StackPop(&s));
-	Print(L"%u\n", StackPop(&s));
-	Print(L"%u\n", StackPop(&s));
+	Print(L"%u\n", *(UINTN*)StackNode_Pop(&s));
+	Print(L"%u\n", *(UINTN*)StackNode_Pop(&s));
+	Print(L"%u\n", *(UINTN*)StackNode_Pop(&s));
+	Print(L"%u\n", *(UINTN*)StackNode_Pop(&s));
 
-	WaitForSpecificKey(e, L'A');*/
+	WaitForSpecificKey(e, L'A');
 
 	Print(L"\n\nPress any key to exit.\n");
 	WaitForKey(e);
@@ -852,7 +525,8 @@ void Environment(ENVIRONMENT *e) {
 //
 
 //Configures the display to it's largest supported text mode size and returns the screen definition.
-SCREEN ConfigureDisplay(EFI_SYSTEM_TABLE *table) {
+Screen ConfigureDisplay(EFI_SYSTEM_TABLE* table)
+{
 	UINTN actualW = 0;
 	UINTN actualH = 0;
 	UINTN highestMode = 0;
@@ -866,31 +540,32 @@ SCREEN ConfigureDisplay(EFI_SYSTEM_TABLE *table) {
 		}
 	}
 	table->ConOut->SetMode(table->ConOut, highestMode);
-	SIZE s;
+	Size s;
 	s.Width = actualW;
 	s.Height = actualH;
-	SCREEN scr;
+	Screen scr;
 	scr.Size = s;
 	scr.Mode = highestMode;
 	return scr;
 }
 
 //Initialize the environment using the system table and image handle.
-void InitEnvironment(EFI_HANDLE *image, EFI_SYSTEM_TABLE *table) {
+void InitEnvironment(EFI_HANDLE* image, EFI_SYSTEM_TABLE* table)
+{
 	table->BootServices->SetWatchdogTimer(0, 0, 0, NULL);
 
-	ENVIRONMENT e;
+	Environment e;
 	e.Image = image;
 	e.Table = table;
 	e.Screen = ConfigureDisplay(table);
 
-	EFI_LOADED_IMAGE_PROTOCOL *LoadedImage;
+	EFI_LOADED_IMAGE_PROTOCOL* LoadedImage;
 	table->BootServices->HandleProtocol(image, &gEfiLoadedImageProtocolGuid, &LoadedImage);
-	EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *FileSystem;
+	EFI_SIMPLE_FILE_SYSTEM_PROTOCOL* FileSystem;
 	table->BootServices->HandleProtocol(LoadedImage->DeviceHandle, &gEfiSimpleFileSystemProtocolGuid, &FileSystem);
 	FileSystem->OpenVolume(FileSystem, &e.File);
 
-	Environment(&e);
+	EnterEnvironment(&e);
 }
 
 //
@@ -898,10 +573,11 @@ void InitEnvironment(EFI_HANDLE *image, EFI_SYSTEM_TABLE *table) {
 //
 
 // Application entrypoint (must be set to 'efi_main' for gnu-efi crt0 compatibility)
-EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
-#if defined(_GNU_EFI)
+EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable)
+{
+	#if defined(_GNU_EFI)
 	InitializeLib(ImageHandle, SystemTable);
-#endif
+	#endif
 
 	/*
 	 * In addition to the standard %-based flags, Print() supports the following:
@@ -916,10 +592,10 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 
 	InitEnvironment(ImageHandle, SystemTable);
 
-#if defined(_DEBUG)
+	#if defined(_DEBUG)
 	// If running in debug mode, use the EFI shut down call to close QEMU
 	SystemTable->RuntimeServices->ResetSystem(EfiResetShutdown, EFI_SUCCESS, 0, NULL);
-#endif
+	#endif
 
 	return EFI_SUCCESS;
 }
