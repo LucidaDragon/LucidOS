@@ -7,7 +7,7 @@
 ' Note: You may get a prompt from the firewall when trying to download the BIOS file
 
 ' Modify these variables as needed
-QEMU_PATH  = "..\QEMU\"
+QEMU_PATH  = ""
 ' You can add something like "-S -gdb tcp:127.0.0.1:1234" if you plan to use gdb to debug
 QEMU_OPTS  = "-net none -monitor none -parallel none"
 ' Set to True if you need to download a file that might be cached locally
@@ -108,11 +108,11 @@ End Sub
 
 
 ' Check that QEMU is available
-If Not fso.FileExists(QEMU_PATH & QEMU_EXE) Then
-  Call WScript.Echo("'" & QEMU_PATH & QEMU_EXE & "' was not found." & vbCrLf &_
-    "Please make sure QEMU is installed or edit the path in '.msvc\debug.vbs'.")
-  Call WScript.Quit(1)
-End If
+'If Not fso.FileExists(QEMU_PATH & QEMU_EXE) Then
+'  Call WScript.Echo("'" & QEMU_PATH & QEMU_EXE & "' was not found." & vbCrLf &_
+'    "Please make sure QEMU is installed or edit the path in '.msvc\debug.vbs'.")
+'  Call WScript.Quit(1)
+'End If
 
 ' Fetch the UEFI firmware and unzip it
 If Not fso.FileExists(FW_FILE) Then
