@@ -32,7 +32,7 @@ typedef struct
 {
 	EFI_HANDLE* Image;
 	EFI_SYSTEM_TABLE* Table;
-	EFI_FILE* File;
+	EFI_FILE* RootDirectory;
 	Screen Screen;
 } Environment;
 
@@ -108,6 +108,11 @@ UINTN max(UINTN a, UINTN b)
 MemBlock malloc(UINTN size)
 {
 	MemBlock result;
+	result.Start = NULL;
+	result.Size = 0;
+
+	if (size == 0) return result;
+
 	EFI_STATUS status;
 	void* handle;
 	status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, size, &handle);
@@ -137,6 +142,19 @@ MemBlock calloc(UINTN num, UINTN size)
 	return result;
 }
 
+//STDLIB: Allocates a block of memory with the specified size and zeros it out.
+MemBlock zmalloc(UINTN size)
+{
+	MemBlock result = malloc(size);
+
+	for (UINTN i = 0; i < result.Size; i++)
+	{
+		((UINT8*)result.Start)[i] = 0;
+	}
+
+	return result;
+}
+
 //STDLIB: Deallocates the specified block of memory.
 void free(MemBlock* block)
 {
@@ -154,7 +172,10 @@ void freeany(void* ptr)
 MemBlock realloc(MemBlock* block, UINTN size)
 {
 	MemBlock result = malloc(size);
-	uefi_call_wrapper(BS->CopyMem, 3, result.Start, block->Start, size);
+	for (UINTN i = 0; i < min(block->Size, size); i++)
+	{
+		((UINT8*)result.Start)[i] = ((UINT8*)block->Start)[i];
+	}
 	free(block);
 	return result;
 }
@@ -274,11 +295,13 @@ void LinkedListNode_Remove(LinkedListNode* node)
 // #Array List Functions#
 //
 
-void New_ArrayList(ArrayList* list, UINTN elementWidth)
+ArrayList New_ArrayList()
 {
-	list->Length = 0;
-	list->Capacity = 1;
-	list->Data = malloc(sizeof(void*));
+	ArrayList list;
+	list.Length = 0;
+	list.Capacity = 1024;
+	list.Data = malloc(sizeof(void*) * list.Capacity);
+	return list;
 }
 
 void Dispose_ArrayList(ArrayList* list)
@@ -286,6 +309,16 @@ void Dispose_ArrayList(ArrayList* list)
 	list->Length = 0;
 	list->Capacity = 0;
 	free(&list->Data);
+}
+
+void* ArrayList_Get(ArrayList list, UINTN index)
+{
+	return ((void**)list.Data.Start)[index];
+}
+
+void ArrayList_Set(ArrayList* list, UINTN index, void* element)
+{
+	((void**)list->Data.Start)[index] = element;
 }
 
 void ArrayList_Add(ArrayList* list, void* element)
@@ -407,51 +440,6 @@ void SetPos(Environment* e, UINTN x, UINTN y)
 }
 
 //
-// #Stack Functions#
-//
-
-//Create a stack node.
-StackNode* New_StackNode(void* initialElement)
-{
-	StackNode* s = malloc(sizeof(StackNode)).Start;
-	s->Value = initialElement;
-	s->Next = NULL;
-	return s;
-}
-
-//Checks to see if a stack is empty.
-BOOLEAN StackNode_IsEmpty(StackNode* root)
-{
-	return !root;
-}
-
-//Pushes to a stack.
-void StackNode_Push(StackNode** root, void* element)
-{
-	StackNode* s = New_StackNode(element);
-	s->Next = *root;
-	*root = s;
-}
-
-//Pops from a stack.
-void* StackNode_Pop(StackNode** root)
-{
-	if (StackNode_IsEmpty(*root)) return NULL;
-	StackNode* node = *root;
-	*root = (*root)->Next;
-	void* element = node->Value;
-	freeany(node);
-	return element;
-}
-
-//Peeks at a stack.
-void* StackNode_Peek(StackNode* root)
-{
-	if (StackNode_IsEmpty(root)) return 0;
-	return root->Value;
-}
-
-//
 // #Graphics Functions#
 //
 
@@ -478,7 +466,8 @@ void DrawBar(Environment* e, UINT8 color)
 void Clear(Environment* e, UINT8 color)
 {
 	SetPos(e, 0, 0);
-	for (UINTN i = 0; i < e->Screen.Size.Height; i++) {
+	for (UINTN i = 0; i < e->Screen.Size.Height; i++)
+	{
 		DrawBar(e, color);
 	}
 	SetPos(e, 0, 0);
@@ -487,8 +476,10 @@ void Clear(Environment* e, UINT8 color)
 //Fills a rectangle with the specified color.
 void FillRect(Environment* e, Rect* r, UINT8 color)
 {
-	for (UINTN y = 0; y < r->Height; y++) {
-		for (UINTN x = 0; x < r->Width; x++) {
+	for (UINTN y = 0; y < r->Height; y++)
+	{
+		for (UINTN x = 0; x < r->Width; x++)
+		{
 			SetPos(e, x + r->X, y + r->Y);
 			PrintColor(e, color);
 		}
@@ -498,13 +489,15 @@ void FillRect(Environment* e, Rect* r, UINT8 color)
 //Draws a rectangle with the specified color.
 void DrawRect(Environment* e, Rect* r, UINT8 color)
 {
-	for (UINTN i = 0; i < r->Width; i++) {
+	for (UINTN i = 0; i < r->Width; i++)
+	{
 		SetPos(e, i + r->X, r->Y);
 		PrintColor(e, color);
 		SetPos(e, i + r->X, r->Y + r->Height);
 		PrintColor(e, color);
 	}
-	for (UINTN i = 0; i <= r->Height; i++) {
+	for (UINTN i = 0; i <= r->Height; i++)
+	{
 		SetPos(e, r->X, i + r->Y);
 		PrintColor(e, color);
 		SetPos(e, r->X + r->Width, i + r->Y);
@@ -516,32 +509,92 @@ void DrawRect(Environment* e, Rect* r, UINT8 color)
 // #Disk IO Functions#
 //
 
-void GetEntries(Environment* e, EFI_FILE* directory, MemBlock* memory, EFI_FILE_INFO** results, UINTN* resultCount)
+void ResetRead(EFI_FILE* directory)
 {
-	UINTN size = 0;
-	directory->GetInfo(directory, &gEfiFileInfoGuid, &size, NULL);
-	MemBlock mem = malloc(size);
-	EFI_FILE_INFO* buffer = (EFI_FILE_INFO*)mem.Start;
-	directory->GetInfo(directory, &gEfiFileInfoGuid, &size, buffer);
-	*results = buffer;
-	*memory = mem;
+	directory->SetPosition(directory, 0);
 }
 
-//Load the specified executable into memory.
-MemBlock Load(Environment* e, CHAR16* name)
+ArrayList GetEntries(EFI_FILE* directory)
 {
-	EFI_FILE* current;
-	e->File->Open(e->File, &current, name, EFI_FILE_MODE_READ, EFI_FILE_READ_ONLY);
-
+	ArrayList result = New_ArrayList();
+	MemBlock buffer;
 	UINTN size;
-	EFI_FILE_INFO info;
-	current->GetInfo(current, &gEfiFileInfoGuid, &size, &info);
-	MemBlock m = malloc(size);
+	EFI_STATUS status;
 
-	current->Read(e->File, &size, m.Start);
+	UINTN i = 0;
 
-	e->File->Close(current);
-	return m;
+	while (1)
+	{
+		size = 1024;
+		buffer = zmalloc(size);
+		status = directory->Read(directory, &size, buffer.Start);
+
+		if (EFI_ERROR(status) || size == 0)
+		{
+			free(&buffer);
+			break;
+		}
+
+		EFI_FILE_INFO* file = (EFI_FILE_INFO*)buffer.Start;
+
+		if (file->FileName[0] == L'.')
+		{
+			free(&buffer);
+			continue;
+		}
+
+		ArrayList_Add(&result, buffer.Start);
+	}
+
+	return result;
+}
+
+ArrayList GetEntriesWithType(EFI_FILE* directory, UINTN type, UINTN invert)
+{
+	ArrayList result = New_ArrayList();
+
+	ArrayList all = GetEntries(directory);
+
+	for (UINTN i = 0; i < all.Length; i++)
+	{
+		void* elem = ArrayList_Get(all, i);
+
+		UINTN isType = ((EFI_FILE_INFO*)elem)->Attribute & type;
+
+		if (invert ? !isType : isType)
+		{
+			ArrayList_Add(&result, elem);
+		}
+		else
+		{
+			freeany(elem);
+		}
+	}
+
+	Dispose_ArrayList(&all);
+
+	return result;
+}
+
+ArrayList GetFiles(EFI_FILE* directory)
+{
+	return GetEntriesWithType(directory, EFI_FILE_DIRECTORY, 1);
+}
+
+ArrayList GetDirectories(EFI_FILE* directory)
+{
+	return GetEntriesWithType(directory, EFI_FILE_DIRECTORY, 0);
+}
+
+EFI_FILE* OpenEntry(EFI_FILE* directory, EFI_FILE_INFO* info)
+{
+	EFI_FILE* child;
+	EFI_STATUS status = directory->Open(directory, &child, info->FileName, EFI_FILE_MODE_READ, EFI_FILE_READ_ONLY);
+
+	if (EFI_ERROR(status)) return 0;
+
+	child->SetPosition(child, 0);
+	return child;
 }
 
 
@@ -555,6 +608,24 @@ MemBlock Load(Environment* e, CHAR16* name)
 //
 // #Environment Runtime Functions#
 //
+
+void PrintEntry(EFI_FILE* directory, EFI_FILE_INFO* entry, int indentation)
+{
+	for (int i = 0; i < indentation; i++) Print(L"  ");
+	Print(L"%s %s\r\n", (entry->Attribute & EFI_FILE_DIRECTORY) ? L"DIR" : L"FIL", entry->FileName);
+
+	if (entry->Attribute & EFI_FILE_DIRECTORY)
+	{
+		EFI_FILE* self = OpenEntry(directory, entry);
+
+		ArrayList entries = GetEntries(self);
+
+		for (UINTN i = 0; i < entries.Length; i++)
+		{
+			PrintEntry(self, (EFI_FILE_INFO*)ArrayList_Get(entries, i), indentation + 1);
+		}
+	}
+}
 
 //Enters a new OS environment.
 void EnterEnvironment(Environment* e)
@@ -578,8 +649,10 @@ void EnterEnvironment(Environment* e)
 	PrintColor(e, EFI_BLUE);
 	PrintColor(e, EFI_MAGENTA);
 	Print(L"\n\n");
-	for (UINT8 b = 0; b < 16; b++) {
-		for (UINT8 f = 0; f < 16; f++) {
+	for (UINT8 b = 0; b < 16; b++)
+	{
+		for (UINT8 f = 0; f < 16; f++)
+		{
 			SetColor(e, f, b);
 			Print(L"A");
 		}
@@ -591,29 +664,19 @@ void EnterEnvironment(Environment* e)
 	Print(L"%NPress any key to continue...");
 	WaitForKey(e);
 
-	//Graphics test
-	Clear(e, EFI_WHITE);
-	Rect r; r.X = 3; r.Y = 3; r.Width = 10; r.Height = 5;
-	FillRect(e, &r, EFI_RED);
-	DrawRect(e, &r, EFI_BLUE);
-	SetColor(e, EFI_BLACK, EFI_WHITE);
-	WaitForKey(e);
+	ClearScreen(e);
 
-	//Stacks test
-	UINTN vals[4] = { 100, 300, 200, 0 };
-	StackNode* s = New_StackNode(&vals[3]);
-	StackNode_Push(&s, &vals[1]);
-	StackNode_Push(&s, &vals[2]);
-	StackNode_Push(&s, &vals[0]);
+	Print(L"Files:\n");
 
-	Print(L"%u\n", *(UINTN*)StackNode_Pop(&s));
-	Print(L"%u\n", *(UINTN*)StackNode_Pop(&s));
-	Print(L"%u\n", *(UINTN*)StackNode_Pop(&s));
-	Print(L"%u\n", *(UINTN*)StackNode_Pop(&s));
+	ArrayList entries = GetEntries(e->RootDirectory);
 
-	WaitForSpecificKey(e, L'A');
+	for (UINTN i = 0; i < entries.Length; i++)
+	{
+		PrintEntry(e->RootDirectory, (EFI_FILE_INFO*)ArrayList_Get(entries, i), 0);
+	}
 
-	Print(L"\n\nPress any key to exit.\n");
+	Print(L"Press any key to exit...");
+
 	WaitForKey(e);
 }
 
@@ -627,10 +690,12 @@ Screen ConfigureDisplay(EFI_SYSTEM_TABLE* table)
 	UINTN actualW = 0;
 	UINTN actualH = 0;
 	UINTN highestMode = 0;
-	for (UINTN i = 0; i < 100; i++) {
+	for (UINTN i = 0; i < 100; i++)
+	{
 		UINTN tempW = 0;
 		UINTN tempH = 0;
-		if (table->ConOut->QueryMode(table->ConOut, i, &tempW, &tempH) == EFI_SUCCESS) {
+		if (table->ConOut->QueryMode(table->ConOut, i, &tempW, &tempH) == EFI_SUCCESS)
+		{
 			actualW = tempW;
 			actualH = tempH;
 			highestMode = i;
@@ -651,18 +716,18 @@ void InitEnvironment(EFI_HANDLE* image, EFI_SYSTEM_TABLE* table)
 {
 	table->BootServices->SetWatchdogTimer(0, 0, 0, NULL);
 
-	Environment e;
-	e.Image = image;
-	e.Table = table;
-	e.Screen = ConfigureDisplay(table);
+	Environment* e = malloc(sizeof(Environment)).Start;
+	e->Image = image;
+	e->Table = table;
+	e->Screen = ConfigureDisplay(table);
 
 	EFI_LOADED_IMAGE_PROTOCOL* LoadedImage;
 	table->BootServices->HandleProtocol(image, &gEfiLoadedImageProtocolGuid, &LoadedImage);
 	EFI_SIMPLE_FILE_SYSTEM_PROTOCOL* FileSystem;
 	table->BootServices->HandleProtocol(LoadedImage->DeviceHandle, &gEfiSimpleFileSystemProtocolGuid, &FileSystem);
-	FileSystem->OpenVolume(FileSystem, &e.File);
+	FileSystem->OpenVolume(FileSystem, &e->RootDirectory);
 
-	EnterEnvironment(&e);
+	EnterEnvironment(e);
 }
 
 //
@@ -672,9 +737,9 @@ void InitEnvironment(EFI_HANDLE* image, EFI_SYSTEM_TABLE* table)
 // Application entrypoint (must be set to 'efi_main' for gnu-efi crt0 compatibility)
 EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable)
 {
-	#if defined(_GNU_EFI)
+#if defined(_GNU_EFI)
 	InitializeLib(ImageHandle, SystemTable);
-	#endif
+#endif
 
 	/*
 	 * In addition to the standard %-based flags, Print() supports the following:
@@ -689,10 +754,7 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable)
 
 	InitEnvironment(ImageHandle, SystemTable);
 
-	#if defined(_DEBUG)
-	// If running in debug mode, use the EFI shut down call to close QEMU
 	SystemTable->RuntimeServices->ResetSystem(EfiResetShutdown, EFI_SUCCESS, 0, NULL);
-	#endif
 
 	return EFI_SUCCESS;
 }
