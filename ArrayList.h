@@ -9,6 +9,7 @@ typedef struct
 	UINTN Capacity;
 } ArrayList;
 
+//Create a new array list.
 ArrayList New_ArrayList()
 {
 	ArrayList list;
@@ -18,6 +19,7 @@ ArrayList New_ArrayList()
 	return list;
 }
 
+//Destroy an array list.
 void Dispose_ArrayList(ArrayList* list)
 {
 	list->Length = 0;
@@ -25,16 +27,19 @@ void Dispose_ArrayList(ArrayList* list)
 	free(&list->Data);
 }
 
+//Get an element from an array list.
 void* ArrayList_Get(ArrayList list, UINTN index)
 {
 	return ((void**)list.Data.Start)[index];
 }
 
+//Set an element in an array list.
 void ArrayList_Set(ArrayList* list, UINTN index, void* element)
 {
 	((void**)list->Data.Start)[index] = element;
 }
 
+//Add an element to an array list.
 void ArrayList_Add(ArrayList* list, void* element)
 {
 	if (list->Length >= list->Capacity)
@@ -46,6 +51,7 @@ void ArrayList_Add(ArrayList* list, void* element)
 	list->Length += 1;
 }
 
+//Insert an element into an array list.
 void ArrayList_Insert(ArrayList* list, void* element, UINTN index)
 {
 	ArrayList_Add(list, element);
@@ -58,6 +64,7 @@ void ArrayList_Insert(ArrayList* list, void* element, UINTN index)
 	((void**)list->Data.Start)[index] = element;
 }
 
+//Remove an element from an array list.
 BOOLEAN ArrayList_Remove(ArrayList* list, void* element)
 {
 	BOOLEAN result = FALSE;

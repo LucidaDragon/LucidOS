@@ -396,6 +396,8 @@
   <ItemGroup>
     <ClInclude Include="..\..\ArrayList.h" />
     <ClInclude Include="..\..\Drawing.h" />
+    <ClInclude Include="..\..\Emitter.h" />
+    <ClInclude Include="..\..\File.h" />
     <ClInclude Include="..\..\LinkedList.h" />
     <ClInclude Include="..\..\Math.h" />
     <ClInclude Include="..\..\Console.h" />

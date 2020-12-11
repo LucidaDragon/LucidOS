@@ -9,6 +9,7 @@ typedef struct LinkedListNode
 	struct LinkedListNode* Previous;
 } LinkedListNode;
 
+//Create a new linked list node.
 LinkedListNode* New_LinkedListNode()
 {
 	LinkedListNode* node = malloc(sizeof(LinkedListNode)).Start;
@@ -18,6 +19,7 @@ LinkedListNode* New_LinkedListNode()
 	return node;
 }
 
+//Destroy a linked list node.
 void Dispose_LinkedListNode(LinkedListNode* node)
 {
 	LinkedListNode* next = node->Next;
@@ -41,6 +43,7 @@ void Dispose_LinkedListNode(LinkedListNode* node)
 	freeany(node);
 }
 
+//Get the first node of a linked list.
 LinkedListNode* LinkedListNode_First(LinkedListNode* node)
 {
 	LinkedListNode* current = node;
@@ -50,6 +53,7 @@ LinkedListNode* LinkedListNode_First(LinkedListNode* node)
 	return current;
 }
 
+//Get the last node of a linked list.
 LinkedListNode* LinkedListNode_Last(LinkedListNode* node)
 {
 	LinkedListNode* current = node;
@@ -59,6 +63,7 @@ LinkedListNode* LinkedListNode_Last(LinkedListNode* node)
 	return current;
 }
 
+//Add a node next to the specified node.
 void LinkedListNode_AddNext(LinkedListNode* node, LinkedListNode* child)
 {
 	LinkedListNode* next = node->Next;
@@ -70,6 +75,7 @@ void LinkedListNode_AddNext(LinkedListNode* node, LinkedListNode* child)
 	if (next != NULL) next->Previous = child;
 }
 
+//Add a node previous to the specified node.
 void LinkedListNode_AddPrevious(LinkedListNode* node, LinkedListNode* child)
 {
 	LinkedListNode* prev = node->Previous;
@@ -81,6 +87,7 @@ void LinkedListNode_AddPrevious(LinkedListNode* node, LinkedListNode* child)
 	if (prev != NULL) prev->Next = child;
 }
 
+//Add a node at the start of a linked list.
 void LinkedListNode_AddFirst(LinkedListNode* node, LinkedListNode* child)
 {
 	LinkedListNode* current = LinkedListNode_Last(node);
@@ -89,6 +96,7 @@ void LinkedListNode_AddFirst(LinkedListNode* node, LinkedListNode* child)
 	current->Previous = child;
 }
 
+//Add a node at the end of a linked list.
 void LinkedListNode_AddLast(LinkedListNode* node, LinkedListNode* child)
 {
 	LinkedListNode* current = LinkedListNode_First(node);
@@ -97,6 +105,7 @@ void LinkedListNode_AddLast(LinkedListNode* node, LinkedListNode* child)
 	current->Next = child;
 }
 
+//Remove a node from a linked list.
 void LinkedListNode_Remove(LinkedListNode* node)
 {
 	if (node->Previous != NULL) node->Previous->Next = node->Next;
