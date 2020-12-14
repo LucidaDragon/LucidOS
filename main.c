@@ -28,14 +28,13 @@ void PrintEntry(EFI_FILE* directory, EFI_FILE_INFO* entry, int indentation)
 	}
 }
 
-#include "Emitter.h"
+#include "Runtime.h"
 
 //Enters a new OS environment.
 void EnterEnvironment(Environment* e)
 {
 	ClearScreen(e);
 
-	//Colors test
 	DrawBar(e, EFI_RED);
 	DrawBar(e, EFI_YELLOW);
 	DrawBar(e, EFI_GREEN);
@@ -59,26 +58,62 @@ void EnterEnvironment(Environment* e)
 		}
 		Print(L"\n");
 	}
-	Print(L"\n\n");
+	Print(L"%N\n\n");
 	SetColor(e, EFI_WHITE, EFI_BLACK);
-
-	Print(L"%NPress any key to continue...");
-	WaitForKey(e);
 
 	ClearScreen(e);
 
-	Print(L"Files:\n");
-
 	ArrayList entries = GetEntries(e->RootDirectory);
+	EFI_FILE_INFO* kernel = 0;
 
 	for (UINTN i = 0; i < entries.Length; i++)
 	{
-		PrintEntry(e->RootDirectory, (EFI_FILE_INFO*)ArrayList_Get(entries, i), 0);
+		EFI_FILE_INFO* entry = (EFI_FILE_INFO*)ArrayList_Get(entries, i);
+
+		if (StrLen(entry->FileName) == 10 &&
+			entry->FileName[0] == 'k' &&
+			entry->FileName[1] == 'e' &&
+			entry->FileName[2] == 'r' &&
+			entry->FileName[3] == 'n' &&
+			entry->FileName[4] == 'e' &&
+			entry->FileName[5] == 'l' &&
+			entry->FileName[6] == '.' &&
+			entry->FileName[7] == 'b' &&
+			entry->FileName[8] == 'i' &&
+			entry->FileName[9] == 'n')
+		{
+			kernel = entry;
+			break;
+		}
 	}
 
-	Print(L"Press any key to exit...");
+	if (kernel == 0)
+	{
+		Print(L"Kernel was not found.\n");
+		Print(L"Press any key to continue...");
+		WaitForKey(e);
+		return;
+	}
 
+	Runtime rt = New_Runtime();
+
+	EFI_STATUS status = Runtime_Launch(&rt, e->RootDirectory, kernel);
+
+	Print(L"\nPress any key to continue...\n");
 	WaitForKey(e);
+
+	if (EFI_ERROR(status))
+	{
+		Print(L"Error occured while launching kernel. %r\n", status);
+		Print(L"Press any key to continue...");
+		WaitForKey(e);
+		return;
+	}
+
+	while (rt.Tasks.Length > 0)
+	{
+		Runtime_Execute(&rt);
+	}
 }
 
 //

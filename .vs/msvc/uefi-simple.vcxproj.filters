@@ -30,9 +30,6 @@
     <ClInclude Include="..\..\LinkedList.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\ArrayList.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\Math.h">
       <Filter>Source Files</Filter>
     </ClInclude>
@@ -46,6 +43,18 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\File.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ArrayList.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\VM.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\VMIL.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Runtime.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

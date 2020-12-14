@@ -64,6 +64,28 @@ void ArrayList_Insert(ArrayList* list, void* element, UINTN index)
 	((void**)list->Data.Start)[index] = element;
 }
 
+//Remove an element at the specified index from an array list.
+void* ArrayList_RemoveAt(ArrayList* list, UINTN index)
+{
+	if (index < 0 || index >= list->Length) return 0;
+
+	void* result = ((void**)list->Data.Start)[index];
+
+	for (UINTN i = index; i < list->Length - 1; i++)
+	{
+		((void**)list->Data.Start)[i] = ((void**)list->Data.Start)[i + 1];
+	}
+
+	list->Length -= 1;
+	
+	if (list->Capacity > 1024 && list->Length < (list->Capacity / 2))
+	{
+		list->Data = realloc(&list->Data, list->Capacity / 2);
+	}
+
+	return result;
+}
+
 //Remove an element from an array list.
 BOOLEAN ArrayList_Remove(ArrayList* list, void* element)
 {
@@ -87,7 +109,7 @@ BOOLEAN ArrayList_Remove(ArrayList* list, void* element)
 		}
 	}
 
-	if (result && (list->Length < (list->Capacity / 2)))
+	if (result && list->Capacity > 1024 && (list->Length < (list->Capacity / 2)))
 	{
 		list->Data = realloc(&list->Data, list->Capacity / 2);
 	}
