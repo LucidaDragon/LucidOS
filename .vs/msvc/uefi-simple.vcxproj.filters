@@ -52,7 +52,7 @@
     <ClInclude Include="..\..\Runtime.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\Editor.h">
+    <ClInclude Include="..\..\TextEditor.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
