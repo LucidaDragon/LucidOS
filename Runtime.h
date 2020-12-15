@@ -20,7 +20,7 @@ EFI_STATUS Runtime_Launch(Runtime* rt, EFI_FILE* directory, EFI_FILE_INFO* file)
 {
 	VM* vm = (VM*)malloc(sizeof(VM)).Start;
 	
-	EFI_STATUS status = LoadVMIL(OpenEntry(directory, file), rt->NextId++, vm);
+	EFI_STATUS status = VMIL_Load(OpenEntry(directory, file), rt->NextId++, vm);
 
 	if (EFI_ERROR(status))
 	{

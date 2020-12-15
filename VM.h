@@ -28,39 +28,43 @@ typedef struct
 
 typedef enum
 {
-	HLT,
-	BRK,
+	IMMEDIATE	= 0b00000001,
 
-	PUSH,
-	POP,
-	LDSTACK,
+	HLT			= 0b00000000,
+	BRK			= 0b00000010,
 
-	LDVAR,
-	STVAR,
+	PUSH		= 0b00000001,
+	DUP			= 0b00000100,
+	POP			= 0b00000110,
+	LDSTACK		= 0b00001000,
 
-	ADD,
-	SUB,
-	MUL,
-	IMUL,
-	DIV,
-	IDIV,
-	MOD,
-	IMOD,
+	LDVAR		= 0b00000011,
+	LDINDVAR	= 0b00000101,
+	STVAR		= 0b00000111,
 
-	AND,
-	OR,
-	XOR,
-	NOT,
+	ADD			= 0b00001010,
+	SUB			= 0b00001100,
+	MUL			= 0b00001110,
+	IMUL		= 0b00010000,
+	DIV			= 0b00010010,
+	IDIV		= 0b00010100,
+	MOD			= 0b00010110,
+	IMOD		= 0b00011000,
 
-	EQU,
-	NEQ,
-	ABV,
-	BEL,
-	GTR,
-	LES,
+	AND			= 0b00011010,
+	OR			= 0b00011100,
+	XOR			= 0b00011110,
+	NOT			= 0b00100000,
 
-	JMP,
-	JIF
+	EQU			= 0b00100010,
+	NEQ			= 0b00100100,
+	ABV			= 0b00100110,
+	BEL			= 0b00101000,
+	GTR			= 0b00101010,
+	LES			= 0b00101100,
+
+	JMP			= 0b00101110,
+	JIF			= 0b00110000
 } OpCode;
 
 VM New_VM(MemBlock memory, UINTN id, UINT8 priority, UINT64* variables, UINT64 varCount, UINT8* start, UINT8* error)
@@ -89,12 +93,12 @@ inline int VM_ValidOperand(VM* vm)
 	return vm->Current >= (UINT8*)vm->Memory.Start && (vm->Current + 8) < ((UINT8*)vm->Memory.Start + vm->Memory.Size);
 }
 
-void VM_PushStack(VM* vm, UINT64 operand)
+inline void VM_PushStack(VM* vm, UINT64 operand)
 {
 	ArrayList_Add(&vm->Stack, (void*)operand);
 }
 
-int VM_PopStack(VM* vm, UINT64* value)
+inline int VM_PopStack(VM* vm, UINT64* value)
 {
 	if (vm->Stack.Length > 0)
 	{
@@ -121,7 +125,7 @@ void VM_Execute(VM* vm)
 	UINT64 value = 0;
 	vm->Current++;
 
-	if (op == PUSH || op == LDVAR || op == STVAR)
+	if (op & IMMEDIATE)
 	{
 		if (!VM_ValidOperand(vm))
 		{
@@ -144,6 +148,13 @@ void VM_Execute(VM* vm)
 		case PUSH:
 			VM_PushStack(vm, operand);
 			return;
+		case DUP:
+			if (VM_PopStack(vm, &operand))
+			{
+				VM_PushStack(vm, operand);
+				VM_PushStack(vm, operand);
+			}
+			return;
 		case POP:
 			VM_PopStack(vm, &operand);
 			return;
@@ -154,6 +165,16 @@ void VM_Execute(VM* vm)
 			if (operand < vm->VarCount)
 			{
 				VM_PushStack(vm, vm->Variables[operand]);
+			}
+			else
+			{
+				vm->Current = vm->Error;
+			}
+			return;
+		case LDINDVAR:
+			if (operand < vm->VarCount)
+			{
+				VM_PushStack(vm, (UINT64)&vm->Variables[operand]);
 			}
 			else
 			{
@@ -382,6 +403,9 @@ void VM_Execute(VM* vm)
 			{
 				vm->Current = vm->Error;
 			}
+			return;
+		default:
+			vm->Current = vm->Error;
 			return;
 	}
 }
