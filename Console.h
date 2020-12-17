@@ -30,12 +30,23 @@ void ClearScreen(Environment* e)
 	e->Table->ConOut->ClearScreen(e->Table->ConOut);
 }
 
-//Waits for any key to be pressed.
-void WaitForKey(Environment* e)
+//Waits for any key to be pressed and also returns the scan code.
+CHAR16 WaitForKeyWithScanCode(Environment* e, CHAR16* scanCode)
 {
 	UINTN event;
+	EFI_INPUT_KEY pressed;
 	e->Table->ConIn->Reset(e->Table->ConIn, FALSE);
 	e->Table->BootServices->WaitForEvent(1, &e->Table->ConIn->WaitForKey, &event);
+	e->Table->ConIn->ReadKeyStroke(e->Table->ConIn, &pressed);
+	*scanCode = pressed.ScanCode;
+	return pressed.UnicodeChar;
+}
+
+//Waits for any key to be pressed.
+inline CHAR16 WaitForKey(Environment* e)
+{
+	CHAR16 scanCode;
+	return WaitForKeyWithScanCode(e, &scanCode);
 }
 
 //Waits for the specified key to be pressed.

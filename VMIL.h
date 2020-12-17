@@ -304,8 +304,6 @@ EFI_STATUS VMIL_Load(EFI_FILE* source, UINTN id, VM* result)
 	if (EFI_ERROR(status)) return status;
 	else if (size != sizeof(length)) return EFI_END_OF_FILE;
 
-	Print(L"Length: %d\n", length);
-
 	MemBlock mem = malloc(length);
 	if (mem.Size == 0) return EFI_OUT_OF_RESOURCES;
 
@@ -328,8 +326,6 @@ EFI_STATUS VMIL_Load(EFI_FILE* source, UINTN id, VM* result)
 		return EFI_BAD_BUFFER_SIZE;
 	}
 
-	Print(L"Vars: %d\n", vars);
-
 	UINT64 error;
 	size = sizeof(error);
 	status = source->Read(source, &size, &error);
@@ -348,8 +344,6 @@ EFI_STATUS VMIL_Load(EFI_FILE* source, UINTN id, VM* result)
 		free(&mem);
 		return EFI_BAD_BUFFER_SIZE;
 	}
-
-	Print(L"Error: %d\n", error);
 
 	UINT8* entry = (UINT8*)mem.Start + (vars * sizeof(UINT64));
 
@@ -374,8 +368,6 @@ EFI_STATUS VMIL_Load(EFI_FILE* source, UINTN id, VM* result)
 		size = sizeof(value);
 		status = source->Read(source, &size, &value);
 		if (EFI_ERROR(status) || size != sizeof(value)) break;
-
-		Print(L"%x ", value);
 
 		*target = value;
 

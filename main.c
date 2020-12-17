@@ -29,39 +29,12 @@ void PrintEntry(EFI_FILE* directory, EFI_FILE_INFO* entry, int indentation)
 }
 
 #include "Runtime.h"
+#include "TextEditor.h"
 
 //Enters a new OS environment.
 void EnterEnvironment(Environment* e)
 {
-	ClearScreen(e);
-
-	DrawBar(e, EFI_RED);
-	DrawBar(e, EFI_YELLOW);
-	DrawBar(e, EFI_GREEN);
-	DrawBar(e, EFI_BLUE);
-	DrawBar(e, EFI_MAGENTA);
-	Print(L"\n");
-	SetColor(e, EFI_WHITE, EFI_BLACK);
-
-	PrintColor(e, EFI_RED);
-	PrintColor(e, EFI_YELLOW);
-	PrintColor(e, EFI_GREEN);
-	PrintColor(e, EFI_BLUE);
-	PrintColor(e, EFI_MAGENTA);
-	Print(L"\n\n");
-	for (UINT8 b = 0; b < 16; b++)
-	{
-		for (UINT8 f = 0; f < 16; f++)
-		{
-			SetColor(e, f, b);
-			Print(L"A");
-		}
-		Print(L"\n");
-	}
-	Print(L"%N\n\n");
-	SetColor(e, EFI_WHITE, EFI_BLACK);
-
-	ClearScreen(e);
+	TextEditor_Run(e);
 
 	ArrayList entries = GetEntries(e->RootDirectory);
 	EFI_FILE_INFO* kernel = 0;
